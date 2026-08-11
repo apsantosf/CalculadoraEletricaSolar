@@ -1,34 +1,83 @@
 // src/app/_layout.tsx
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  Alert,
   BackHandler,
+  Image,
   Modal,
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  atualizarNomeProjeto,
+  carregarProjetoAtivo,
+  limparProjeto,
+  salvarNoHistorico,
+} from "../utils/storage";
 
 export default function RootLayout() {
   const [modalVisivel, setModalVisivel] = useState(false);
+  const [nomeProjetoModal, setNomeProjetoModal] = useState("");
+  const [isNovo, setIsNovo] = useState(true);
+
+  // NOVO: Controle de estado para a tela de Encerramento na Web
+  const [isEncerrado, setIsEncerrado] = useState(false);
+
   const router = useRouter();
 
-  const reiniciarProjeto = () => {
+  const abrirModal = async () => {
+    const projAtivo = await carregarProjetoAtivo();
+    setNomeProjetoModal(
+      projAtivo.nome === "Novo Projeto Solar" ? "" : projAtivo.nome,
+    );
+    setIsNovo(projAtivo.nome === "Novo Projeto Solar");
+    setModalVisivel(true);
+  };
+
+  const handleSalvarProjeto = async () => {
+    if (!nomeProjetoModal.trim()) {
+      Platform.OS === "web"
+        ? window.alert("Digite um nome para salvar o projeto.")
+        : Alert.alert("Aviso", "Digite um nome para salvar o projeto.");
+      return;
+    }
+    await atualizarNomeProjeto(nomeProjetoModal);
+    await salvarNoHistorico();
+    setModalVisivel(false);
+    Platform.OS === "web"
+      ? window.alert("Projeto salvo no histórico com sucesso!")
+      : Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!");
+  };
+
+  const reiniciarProjeto = async () => {
+    await limparProjeto();
     setModalVisivel(false);
     if (Platform.OS === "web" && typeof window !== "undefined") {
-      window.location.reload();
+      window.location.href = "/";
     } else {
       router.replace("/");
     }
   };
 
-  const encerrarApp = () => {
+  // A FUNÇÃO CORRIGIDA DO JEITO "REACT"
+  const encerrarApp = async () => {
+    await limparProjeto();
     setModalVisivel(false);
+
     if (Platform.OS === "web" && typeof window !== "undefined") {
-      window.alert("Para encerrar, por favor, feche a aba do seu navegador.");
+      // 1. Tenta forçar o fechamento da aba nativamente
+      window.open("", "_self", "");
+      window.close();
+
+      // 2. Se o navegador bloquear, o React entra em ação e substitui a tela com segurança
+      setTimeout(() => {
+        setIsEncerrado(true);
+      }, 300);
     } else {
       BackHandler.exitApp();
     }
@@ -37,15 +86,28 @@ export default function RootLayout() {
   const HeaderDireita = () => (
     <View style={styles.headerRightContainer}>
       <Text style={styles.versaoTexto}>v1.0.0</Text>
-      <TouchableOpacity
-        onPress={() => setModalVisivel(true)}
-        style={styles.btnFechar}
-      >
+      <TouchableOpacity onPress={abrirModal} style={styles.btnFechar}>
         <Text style={styles.iconeFechar}>X</Text>
       </TouchableOpacity>
     </View>
   );
 
+  // === TELA DE ENCERRAMENTO (ABATE VISUAL SEGURO) ===
+  if (isEncerrado) {
+    return (
+      <View style={styles.telaEncerramento}>
+        <Text style={styles.tituloEncerramento}>Sessão Encerrada</Text>
+        <Text style={styles.textoEncerramento}>
+          Os dados foram apagados com segurança.
+        </Text>
+        <Text style={styles.textoEncerramento}>
+          Você já pode fechar esta aba do navegador.
+        </Text>
+      </View>
+    );
+  }
+
+  // === APLICATIVO NORMAL ===
   return (
     <View style={styles.webContainer}>
       <Stack
@@ -58,28 +120,20 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen
-          name="index"
+          name="(tabs)"
           options={{
             title: "Elétrica Solar",
             headerLeft: () => (
-              <MaterialCommunityIcons
-                name="solar-panel-large"
-                size={26}
-                color="#000"
-                style={{ marginLeft: 10 }}
+              <Image
+                source={require("../../assets/images/banner-solar.png")}
+                style={styles.logoHeader}
               />
             ),
           }}
         />
-        <Stack.Screen
-          name="resultado"
-          options={{
-            title: "Dimensionamento",
-          }}
-        />
+        <Stack.Screen name="index" options={{ title: "Carregando..." }} />
       </Stack>
 
-      {/* MODAL DE ALERTA AJUSTADO */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -88,10 +142,29 @@ export default function RootLayout() {
       >
         <View style={styles.modalBackground}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitulo}>Atenção</Text>
+            <Text style={styles.modalTitulo}>Opções do Projeto</Text>
+
+            <Text style={styles.modalLabel}>Nome do Projeto:</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={nomeProjetoModal}
+              onChangeText={setNomeProjetoModal}
+              placeholder="Digite o nome..."
+            />
+
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.btnVerde]}
+              onPress={handleSalvarProjeto}
+            >
+              <Text style={styles.modalBtnTextoBranco}>
+                {isNovo ? "Salvar Projeto" : "Atualizar Projeto"}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.divisor} />
+
             <Text style={styles.modalTexto}>
-              Deseja realmente iniciar um Novo Projeto? Todos os dados atuais
-              serão perdidos. Ou deseja encerrar o aplicativo?
+              Deseja iniciar um projeto do zero ou sair?
             </Text>
 
             <TouchableOpacity
@@ -150,8 +223,15 @@ const styles = StyleSheet.create({
   },
   btnFechar: { paddingHorizontal: 6, paddingVertical: 2 },
   iconeFechar: { fontWeight: "bold", fontSize: 18, color: "#000" },
+  logoHeader: {
+    width: 44,
+    height: 32,
+    borderRadius: 6,
+    marginLeft: 10,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.2)",
+  },
 
-  // Fundo escuro cobrindo o app
   modalBackground: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -159,7 +239,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  // Caixa do Modal travada em tamanho proporcional (máximo 340px)
   modalContainer: {
     width: "90%",
     maxWidth: 340,
@@ -172,19 +251,42 @@ const styles = StyleSheet.create({
     boxShadow:
       Platform.OS === "web" ? "0px 4px 20px rgba(0, 0, 0, 0.25)" : undefined,
   },
+
   modalTitulo: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#000",
-    marginBottom: 10,
+    marginBottom: 15,
     textAlign: "center",
   },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#444",
+    alignSelf: "flex-start",
+    marginBottom: 5,
+  },
+  modalInput: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#CCC",
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 15,
+    backgroundColor: "#F9F9F9",
+  },
+
+  divisor: {
+    height: 1,
+    width: "100%",
+    backgroundColor: "#EEE",
+    marginVertical: 15,
+  },
   modalTexto: {
-    fontSize: 13,
-    color: "#555",
+    fontSize: 12,
+    color: "#777",
     textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 18,
+    marginBottom: 15,
   },
 
   modalBtn: {
@@ -194,6 +296,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  btnVerde: { backgroundColor: "#28A745" },
   btnAzul: { backgroundColor: "#007BFF" },
   btnVermelho: { backgroundColor: "#DC3545" },
   btnBranco: {
@@ -201,7 +304,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DCDCDC",
   },
-
   modalBtnTextoBranco: { color: "#FFF", fontWeight: "bold", fontSize: 14 },
   modalBtnTextoCinza: { color: "#444", fontWeight: "bold", fontSize: 14 },
+
+  // NOVOS ESTILOS PARA A TELA DE ENCERRAMENTO (WEB)
+  telaEncerramento: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8F9FA",
+    padding: 20,
+  },
+  tituloEncerramento: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#1E293B",
+    marginBottom: 10,
+  },
+  textoEncerramento: {
+    fontSize: 15,
+    color: "#64748B",
+    marginBottom: 6,
+    textAlign: "center",
+  },
 });
