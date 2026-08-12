@@ -12,9 +12,25 @@ export const carregarProjetoAtivo = async () => {
     const jsonValue = await AsyncStorage.getItem(PROJETO_ATIVO_KEY);
     return jsonValue != null
       ? JSON.parse(jsonValue)
-      : { nome: "Novo Projeto Solar", inventario: [] };
+      : {
+          nome: "Novo Projeto Solar",
+          inventario: [],
+          estado: "SP",
+          temRede: true,
+          faseRede: "Bifasico",
+          tipoCalculo: "equipamentos", // 'equipamentos' ou 'direto'
+          consumoDiretokWh: 0, // Guarda o valor total da conta de luz
+        };
   } catch (e) {
-    return { nome: "Novo Projeto Solar", inventario: [] };
+    return {
+      nome: "Novo Projeto Solar",
+      inventario: [],
+      estado: "SP",
+      temRede: true,
+      faseRede: "Bifasico",
+      tipoCalculo: "equipamentos",
+      consumoDiretokWh: 0,
+    };
   }
 };
 

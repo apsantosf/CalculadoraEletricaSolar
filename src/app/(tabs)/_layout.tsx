@@ -9,41 +9,74 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { carregarProjetoAtivo } from "../../utils/storage";
 
-// === A NOSSA BARRA CUSTOMIZADA ===
 function CustomTabBar({ state, descriptors, navigation }: any) {
+  const insets = useSafeAreaInsets();
+
+  const paddingInferior =
+    Platform.OS === "web" ? 0 : insets.bottom > 0 ? insets.bottom + 5 : 15;
+  const alturaTotal = Platform.OS === "web" ? 65 : 60 + paddingInferior;
+
   return (
-    <View style={styles.tabBarContainer}>
+    <View
+      style={[
+        styles.tabBarContainer,
+        { paddingBottom: paddingInferior, height: alturaTotal },
+      ]}
+    >
       {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         const label = options.title !== undefined ? options.title : route.name;
         const isFocused = state.index === index;
 
         const onPress = async () => {
-          // === TRAVA RIGOROSA DO PROJETO EM ANDAMENTO ===
-          if (route.name === "resultado") {
-            const projetoAtivo = await carregarProjetoAtivo();
+          const projetoAtivo = await carregarProjetoAtivo();
 
-            // Verifica estritamente se o projeto atual tem cargas cadastradas
-            const temCargasNoProjeto =
-              projetoAtivo &&
-              projetoAtivo.inventario &&
-              projetoAtivo.inventario.length > 0;
-
-            if (!temCargasNoProjeto) {
+          // === TRAVA DA ABA CARGAS ===
+          if (route.name === "carga") {
+            if (projetoAtivo?.tipoCalculo === "direto") {
               const msg =
-                "O Memorial está bloqueado. Adicione pelo menos um equipamento no projeto em andamento na aba 'Cargas'.";
-
-              if (Platform.OS === "web") {
-                window.alert(msg);
-              } else {
-                Alert.alert("Aba Bloqueada 🔒", msg);
-              }
-              return; // Interrompe a navegação imediatamente
+                "Você selecionou o Cálculo Direto. A lista de equipamentos não é necessária.";
+              Platform.OS === "web"
+                ? window.alert(msg)
+                : Alert.alert("Cálculo Direto ⚡", msg);
+              return;
             }
           }
-          // ============================================
+
+          // === TRAVA DA ABA MEMORIAL ===
+          if (route.name === "resultado") {
+            if (
+              projetoAtivo?.tipoCalculo === "equipamentos" ||
+              !projetoAtivo?.tipoCalculo
+            ) {
+              const temCargas =
+                projetoAtivo?.inventario && projetoAtivo.inventario.length > 0;
+              if (!temCargas) {
+                const msg =
+                  "Adicione pelo menos um equipamento na aba 'Cargas'.";
+                Platform.OS === "web"
+                  ? window.alert(msg)
+                  : Alert.alert("Aba Bloqueada 🔒", msg);
+                return;
+              }
+            } else if (projetoAtivo?.tipoCalculo === "direto") {
+              // BLINDAGEM AQUI: Usando ?. para nunca quebrar se for null
+              const temConsumo =
+                projetoAtivo?.consumoDiretokWh &&
+                projetoAtivo.consumoDiretokWh > 0;
+              if (!temConsumo) {
+                const msg =
+                  "Informe o Consumo Mensal (kWh) na aba Início para gerar o Memorial.";
+                Platform.OS === "web"
+                  ? window.alert(msg)
+                  : Alert.alert("Aba Bloqueada 🔒", msg);
+                return;
+              }
+            }
+          }
 
           const event = navigation.emit({
             type: "tabPress",
@@ -99,8 +132,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderTopWidth: 1,
     borderTopColor: "#CBD5E1",
-    height: Platform.OS === "web" ? 65 : 75,
-    paddingBottom: Platform.OS === "web" ? 0 : 15,
     // @ts-ignore
     boxShadow:
       Platform.OS === "web" ? "0px -2px 5px rgba(0,0,0,0.03)" : undefined,
