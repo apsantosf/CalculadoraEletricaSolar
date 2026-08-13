@@ -34,7 +34,6 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         const onPress = async () => {
           const projetoAtivo = await carregarProjetoAtivo();
 
-          // === TRAVA DA ABA CARGAS ===
           if (route.name === "carga") {
             if (projetoAtivo?.tipoCalculo === "direto") {
               const msg =
@@ -46,35 +45,39 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             }
           }
 
-          // === TRAVA DA ABA MEMORIAL ===
-          if (route.name === "resultado") {
-            if (
+          if (route.name === "resultado" || route.name === "materiais") {
+            const isEquip =
               projetoAtivo?.tipoCalculo === "equipamentos" ||
-              !projetoAtivo?.tipoCalculo
-            ) {
-              const temCargas =
-                projetoAtivo?.inventario && projetoAtivo.inventario.length > 0;
-              if (!temCargas) {
-                const msg =
-                  "Adicione pelo menos um equipamento na aba 'Cargas'.";
-                Platform.OS === "web"
-                  ? window.alert(msg)
-                  : Alert.alert("Aba Bloqueada 🔒", msg);
-                return;
-              }
-            } else if (projetoAtivo?.tipoCalculo === "direto") {
-              // BLINDAGEM AQUI: Usando ?. para nunca quebrar se for null
-              const temConsumo =
-                projetoAtivo?.consumoDiretokWh &&
-                projetoAtivo.consumoDiretokWh > 0;
-              if (!temConsumo) {
-                const msg =
-                  "Informe o Consumo Mensal (kWh) na aba Início para gerar o Memorial.";
-                Platform.OS === "web"
-                  ? window.alert(msg)
-                  : Alert.alert("Aba Bloqueada 🔒", msg);
-                return;
-              }
+              !projetoAtivo?.tipoCalculo;
+            const isDireto = projetoAtivo?.tipoCalculo === "direto";
+            const isMisto = projetoAtivo?.tipoCalculo === "misto";
+
+            const temCargas =
+              projetoAtivo?.inventario && projetoAtivo.inventario.length > 0;
+            const temConsumo =
+              projetoAtivo?.consumoDiretokWh &&
+              projetoAtivo.consumoDiretokWh > 0;
+
+            if (isEquip && !temCargas) {
+              const msg = "Adicione pelo menos um equipamento na aba 'Cargas'.";
+              Platform.OS === "web"
+                ? window.alert(msg)
+                : Alert.alert("Aba Bloqueada 🔒", msg);
+              return;
+            } else if (isDireto && !temConsumo) {
+              const msg =
+                "Informe o Consumo Mensal (kWh) na aba Início para processar os dados.";
+              Platform.OS === "web"
+                ? window.alert(msg)
+                : Alert.alert("Aba Bloqueada 🔒", msg);
+              return;
+            } else if (isMisto && (!temConsumo || !temCargas)) {
+              const msg =
+                "No MODO MISTO, informe o Consumo Base (aba Início) E adicione Cargas Extras (aba Cargas).";
+              Platform.OS === "web"
+                ? window.alert(msg)
+                : Alert.alert("Aba Bloqueada 🔒", msg);
+              return;
             }
           }
 
@@ -94,7 +97,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         let iconName: any = "help-circle";
         if (route.name === "inicio") iconName = "home-variant-outline";
         if (route.name === "carga") iconName = "format-list-checks";
-        if (route.name === "resultado") iconName = "solar-power";
+        if (route.name === "materiais") iconName = "toolbox-outline";
+        if (route.name === "resultado") iconName = "file-document-outline";
 
         return (
           <TouchableOpacity
@@ -121,6 +125,7 @@ export default function TabLayout() {
     >
       <Tabs.Screen name="inicio" options={{ title: "Início" }} />
       <Tabs.Screen name="carga" options={{ title: "Cargas" }} />
+      <Tabs.Screen name="materiais" options={{ title: "Materiais" }} />
       <Tabs.Screen name="resultado" options={{ title: "Memorial" }} />
     </Tabs>
   );

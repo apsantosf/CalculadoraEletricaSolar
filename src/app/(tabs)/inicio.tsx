@@ -50,7 +50,10 @@ export default function InicioScreen() {
     );
   };
 
-  const alternarTipoCalculo = (novoTipo: "equipamentos" | "direto") => {
+  // === LÓGICA ATUALIZADA COM O MODO MISTO ===
+  const alternarTipoCalculo = (
+    novoTipo: "equipamentos" | "direto" | "misto",
+  ) => {
     if (projeto?.tipoCalculo === novoTipo) return;
 
     const temEquipamentos =
@@ -58,61 +61,69 @@ export default function InicioScreen() {
     const temConsumo =
       projeto?.consumoDiretokWh && projeto.consumoDiretokWh > 0;
 
-    if (novoTipo === "direto" && temEquipamentos) {
+    // Vai perder a lista de equipamentos?
+    const perdeEquipamentos =
+      (projeto?.tipoCalculo === "equipamentos" ||
+        projeto?.tipoCalculo === "misto") &&
+      novoTipo === "direto" &&
+      temEquipamentos;
+    // Vai perder o consumo digitado?
+    const perdeConsumo =
+      (projeto?.tipoCalculo === "direto" || projeto?.tipoCalculo === "misto") &&
+      novoTipo === "equipamentos" &&
+      temConsumo;
+
+    const executarTroca = () => {
+      if (novoTipo === "direto")
+        salvarAlteracoes({ tipoCalculo: novoTipo, inventario: [] });
+      else if (novoTipo === "equipamentos")
+        salvarAlteracoes({ tipoCalculo: novoTipo, consumoDiretokWh: 0 });
+      else salvarAlteracoes({ tipoCalculo: novoTipo }); // Para 'misto' não apaga nada!
+    };
+
+    if (perdeEquipamentos) {
       const msg =
-        "Mudar para 'Consumo Total' apagará sua lista de equipamentos atual e bloqueará o Memorial até o novo consumo ser informado.\n\nDeseja iniciar esse novo cálculo?";
+        "Mudar para 'Consumo Total' apagará a lista de cargas atuais. Deseja continuar?";
       if (Platform.OS === "web") {
-        if (window.confirm(msg))
-          salvarAlteracoes({ tipoCalculo: "direto", inventario: [] });
+        if (window.confirm(msg)) executarTroca();
       } else {
-        Alert.alert("Aviso de Alteração ⚠️", msg, [
+        Alert.alert("Aviso ⚠️", msg, [
           { text: "Cancelar", style: "cancel" },
           {
             text: "Sim, apagar e mudar",
             style: "destructive",
-            onPress: () =>
-              salvarAlteracoes({ tipoCalculo: "direto", inventario: [] }),
+            onPress: executarTroca,
           },
         ]);
       }
-    } else if (novoTipo === "equipamentos" && temConsumo) {
+    } else if (perdeConsumo) {
       const msg =
-        "Mudar para 'Por Equipamentos' apagará o valor de consumo mensal que você digitou e bloqueará o Memorial até você adicionar novas cargas.\n\nDeseja iniciar esse novo cálculo?";
+        "Mudar para 'Por Equipamentos' apagará o consumo base atual da conta. Deseja continuar?";
       if (Platform.OS === "web") {
-        if (window.confirm(msg))
-          salvarAlteracoes({
-            tipoCalculo: "equipamentos",
-            consumoDiretokWh: 0,
-          });
+        if (window.confirm(msg)) executarTroca();
       } else {
-        Alert.alert("Aviso de Alteração ⚠️", msg, [
+        Alert.alert("Aviso ⚠️", msg, [
           { text: "Cancelar", style: "cancel" },
           {
             text: "Sim, apagar e mudar",
             style: "destructive",
-            onPress: () =>
-              salvarAlteracoes({
-                tipoCalculo: "equipamentos",
-                consumoDiretokWh: 0,
-              }),
+            onPress: executarTroca,
           },
         ]);
       }
     } else {
-      salvarAlteracoes({ tipoCalculo: novoTipo });
+      executarTroca();
     }
   };
 
-  // === NOVAS FUNÇÕES: GERENCIAMENTO DE HISTÓRICO ===
+  // Gerenciamento de Histórico
   const selecionarProjetoSalvo = async (proj: any) => {
     const msg = `Deseja carregar o projeto "${proj.nome}"?\n\nQualquer alteração não salva no rascunho atual será perdida.`;
-
     const executar = async () => {
-      await carregarDoHistorico(proj); // Joga pro banco de dados como Ativo
-      setProjeto(proj); // Atualiza a tela na hora
+      await carregarDoHistorico(proj);
+      setProjeto(proj);
       setMostrarPickerHistorico(false);
     };
-
     if (Platform.OS === "web") {
       if (window.confirm(msg)) await executar();
     } else {
@@ -125,13 +136,11 @@ export default function InicioScreen() {
 
   const deletarProjetoDoHistorico = async (nome: string) => {
     const msg = `Deseja excluir permanentemente o projeto "${nome}" do histórico?`;
-
     const executar = async () => {
       await excluirDoHistorico(nome);
       const novoHist = await carregarHistorico();
-      setHistorico(novoHist); // Recarrega a lista
+      setHistorico(novoHist);
     };
-
     if (Platform.OS === "web") {
       if (window.confirm(msg)) await executar();
     } else {
@@ -141,7 +150,6 @@ export default function InicioScreen() {
       ]);
     }
   };
-  // ===============================================
 
   if (!projeto)
     return (
@@ -199,7 +207,9 @@ export default function InicioScreen() {
                       <Text style={styles.historicoDetalhe}>
                         {item.tipoCalculo === "direto"
                           ? "Consumo Total"
-                          : "Equipamentos"}{" "}
+                          : item.tipoCalculo === "misto"
+                            ? "Modo Misto"
+                            : "Equipamentos"}{" "}
                         • {item.estado || "Sem estado"}
                       </Text>
                     </TouchableOpacity>
@@ -224,7 +234,7 @@ export default function InicioScreen() {
           style={styles.input}
           value={projeto?.nome || ""}
           onChangeText={(texto) => salvarAlteracoes({ nome: texto })}
-          placeholder="Ex: Sítio São José"
+          placeholder="Ex: Chácara Igaratá"
         />
       </View>
 
@@ -232,7 +242,6 @@ export default function InicioScreen() {
       <View style={styles.card}>
         <Text style={styles.tituloCard}>Dados do Local de Instalação</Text>
 
-        {/* LOCALIZAÇÃO (PICKER DROPDOWN) */}
         <Text style={styles.label}>Estado / Região (Índice Solar):</Text>
         <TouchableOpacity
           style={styles.pickerButton}
@@ -266,29 +275,34 @@ export default function InicioScreen() {
           </View>
         )}
 
-        {/* MODO DE CÁLCULO */}
+        {/* ==================================================== */}
+        {/* MODO DE CÁLCULO (AGORA COM 3 BOTÕES LADO A LADO) */}
+        {/* ==================================================== */}
         <Text style={styles.label}>Método de Dimensionamento:</Text>
         <View style={styles.linhaBotoes}>
           <TouchableOpacity
             style={[
               styles.btnPillDuplo,
-              projeto?.tipoCalculo !== "direto" && styles.btnPillAtivo,
+              projeto?.tipoCalculo === "equipamentos" && styles.btnPillAtivo,
             ]}
             onPress={() => alternarTipoCalculo("equipamentos")}
           >
             <MaterialCommunityIcons
               name="format-list-checks"
-              size={18}
-              color={projeto?.tipoCalculo !== "direto" ? "#FFF" : "#475569"}
-              style={{ marginRight: 6 }}
+              size={16}
+              color={
+                projeto?.tipoCalculo === "equipamentos" ? "#FFF" : "#475569"
+              }
+              style={{ marginRight: 4 }}
             />
             <Text
               style={[
                 styles.txtPill,
-                projeto?.tipoCalculo !== "direto" && styles.txtPillAtivo,
+                projeto?.tipoCalculo === "equipamentos" && styles.txtPillAtivo,
+                { fontSize: 11 },
               ]}
             >
-              Por Equipamentos
+              Cargas
             </Text>
           </TouchableOpacity>
 
@@ -301,26 +315,54 @@ export default function InicioScreen() {
           >
             <MaterialCommunityIcons
               name="lightning-bolt"
-              size={18}
+              size={16}
               color={projeto?.tipoCalculo === "direto" ? "#FFF" : "#475569"}
-              style={{ marginRight: 6 }}
+              style={{ marginRight: 4 }}
             />
             <Text
               style={[
                 styles.txtPill,
                 projeto?.tipoCalculo === "direto" && styles.txtPillAtivo,
+                { fontSize: 11 },
               ]}
             >
-              Consumo Total
+              Conta
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.btnPillDuplo,
+              projeto?.tipoCalculo === "misto" && styles.btnPillAtivo,
+            ]}
+            onPress={() => alternarTipoCalculo("misto")}
+          >
+            <MaterialCommunityIcons
+              name="layers-plus"
+              size={16}
+              color={projeto?.tipoCalculo === "misto" ? "#FFF" : "#475569"}
+              style={{ marginRight: 4 }}
+            />
+            <Text
+              style={[
+                styles.txtPill,
+                projeto?.tipoCalculo === "misto" && styles.txtPillAtivo,
+                { fontSize: 11 },
+              ]}
+            >
+              Misto
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* CAMPO DE DIGITAR O CONSUMO */}
-        {projeto?.tipoCalculo === "direto" && (
-          <View style={{ marginBottom: 10 }}>
+        {/* CAMPO DE DIGITAR O CONSUMO (Aparece no Direto E no Misto) */}
+        {(projeto?.tipoCalculo === "direto" ||
+          projeto?.tipoCalculo === "misto") && (
+          <View style={{ marginBottom: 10, marginTop: 8 }}>
             <Text style={styles.label}>
-              Consumo Mensal da Conta de Luz (kWh):
+              {projeto?.tipoCalculo === "misto"
+                ? "Consumo Base Atual (kWh):"
+                : "Consumo Mensal da Conta (kWh):"}
             </Text>
             <TextInput
               style={styles.input}
@@ -335,12 +377,20 @@ export default function InicioScreen() {
                   consumoDiretokWh: parseFloat(t.replace(",", ".")) || 0,
                 })
               }
-              placeholder="Ex: 450"
+              placeholder={
+                projeto?.tipoCalculo === "misto"
+                  ? "Ex: 250 (Conta atual)"
+                  : "Ex: 450"
+              }
             />
+            {projeto?.tipoCalculo === "misto" && (
+              <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+                * Adicione os novos equipamentos (Ex: Piscina) na aba "Cargas".
+              </Text>
+            )}
           </View>
         )}
 
-        {/* CONCESSIONÁRIA */}
         <Text style={styles.label}>
           A propriedade possui rede da Concessionária?
         </Text>
@@ -392,7 +442,6 @@ export default function InicioScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* TIPO DE REDE */}
         {projeto?.temRede && (
           <>
             <Text style={styles.label}>Tipo de Ligação (Taxa Mínima):</Text>
@@ -425,7 +474,6 @@ export default function InicioScreen() {
         )}
       </View>
 
-      {/* AJUDA E MANUAL */}
       <View style={styles.card}>
         <Text style={styles.tituloCard}>Ajuda e Suporte</Text>
         <Text style={{ fontSize: 13, color: "#64748B", marginBottom: 12 }}>
@@ -465,7 +513,6 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
 
-  // CABEÇALHO DO CARD 1
   cabecalhoCard: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -488,7 +535,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
-  // LISTA DO HISTÓRICO
   txtHistoricoVazio: {
     padding: 14,
     textAlign: "center",

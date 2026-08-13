@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CalculadoraEletricaSolar",
+    "name": "Elétrica Solar",
     "slug": "CalculadoraEletricaSolar",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.apsantosf.CalculadoraEletricaSolar"
+      "package": "com.apsantosf.CalculadoraEletricaSolar",
+      "versionCode": 1
     },
     "web": {
       "output": "static",
