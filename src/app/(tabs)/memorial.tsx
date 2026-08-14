@@ -1,4 +1,4 @@
-// src/app/(tabs)/resultado.tsx
+// src/app/(tabs)/memorial.tsx
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import { useFocusEffect } from "expo-router";
@@ -6,6 +6,7 @@ import * as Sharing from "expo-sharing";
 import { useCallback, useState } from "react";
 import {
   Alert,
+  Keyboard,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,7 +17,7 @@ import {
 import { REGIOES_SOLARES } from "../../constants/regioes";
 import { carregarProjetoAtivo } from "../../utils/storage";
 
-export default function ResultadoScreen() {
+export default function MemorialScreen() {
   const [projeto, setProjeto] = useState<any>(null);
 
   useFocusEffect(
@@ -59,13 +60,11 @@ export default function ResultadoScreen() {
   const nomeEstado = regiao ? regiao.nome : "Não informado";
   const siglaEstado = projeto?.estado ? `(${projeto.estado})` : "";
 
-  // Cálculos On-Grid
   const eficienciaSistema = 0.75;
   const potenciaPicoWp =
     hsp > 0 ? consumoDiarioWh / (hsp * eficienciaSistema) : 0;
   const inversorKw = potenciaPicoWp / 1000;
 
-  // Cálculos Off-Grid e Materiais para o PDF
   const diasAutonomia = 2;
   const tensaoBancoV = 24;
   const profundidadeDescarga = 0.5;
@@ -79,10 +78,9 @@ export default function ResultadoScreen() {
   const qtdStringsParalelo = Math.ceil(capacidadeBateriasAh / valorBateria);
   const totalBaterias = qtdBateriasSerie * qtdStringsParalelo;
 
-  // ==========================================
-  // === MÓDULO GERADOR DE PDF PROFISSIONAL ===
-  // ==========================================
   const exportarPDF = async () => {
+    Keyboard.dismiss();
+
     try {
       const dataAtual = new Date().toLocaleDateString("pt-BR");
 
@@ -206,7 +204,6 @@ export default function ResultadoScreen() {
         </table>
       `;
 
-      // NOVO BLOCO HTML: DICAS DE TRANSPARÊNCIA
       const htmlOrientacoes = `
         <h2 class="section-title">5. Orientações Comerciais e Técnicas</h2>
         <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 15px; margin-bottom: 20px; page-break-inside: avoid;">
@@ -358,18 +355,22 @@ export default function ResultadoScreen() {
       `;
 
       if (Platform.OS === "web") {
-        const novaGuia = window.open("", "_blank");
-        if (novaGuia) {
-          novaGuia.document.write(html);
-          novaGuia.document.close();
-          setTimeout(() => {
-            novaGuia.print();
-          }, 500);
-        } else {
-          window.alert(
-            "Por favor, libere os pop-ups do seu navegador para gerar o PDF.",
-          );
-        }
+        // 💡 A BOLHA ISOLADA QUE SALVA A PÁTRIA (Não trava mais as outras abas!)
+        const htmlComScript = html.replace(
+          "</body>",
+          "<script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script></body>",
+        );
+        const blob = new Blob([htmlComScript], {
+          type: "text/html;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer"; // Desliga a aba do PDF da nossa aba do App
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       } else {
         const { uri } = await Print.printToFileAsync({ html });
         await Sharing.shareAsync(uri, {
@@ -444,7 +445,6 @@ export default function ResultadoScreen() {
         </View>
       </View>
 
-      {/* NOVO PAINEL DE ORIENTAÇÃO NO APP */}
       <Text style={styles.tituloSecao}>Guia de Instalação e Custos</Text>
       <View style={styles.cardAviso}>
         <MaterialCommunityIcons

@@ -3,13 +3,16 @@ import { REGIOES_SOLARES } from "../constants/regioes";
 import { MaterialBase } from "../data/tabelaMateriais";
 
 export function calcularSistema(projeto: any, tabelaPrecos: MaterialBase[]) {
-  // 1. Cálculo de Consumo
   const isDireto = projeto?.tipoCalculo === "direto";
   const isMisto = projeto?.tipoCalculo === "misto";
-  const consumoBaseWh = ((projeto?.consumoDiretokWh || 0) * 1000) / 30;
+  const consumoBaseWh =
+    ((parseFloat(projeto?.consumoDiretokWh) || 0) * 1000) / 30;
   const consumoEquipamentosWh = (projeto?.inventario || []).reduce(
     (tot: number, item: any) =>
-      tot + item.potenciaW * item.quantidade * item.horasUsoDia,
+      tot +
+      parseFloat(item.potenciaW) *
+        parseFloat(item.quantidade) *
+        parseFloat(item.horasUsoDia),
     0,
   );
 
@@ -19,71 +22,80 @@ export function calcularSistema(projeto: any, tabelaPrecos: MaterialBase[]) {
       ? consumoBaseWh + consumoEquipamentosWh
       : consumoEquipamentosWh;
 
-  // 2. Dimensionamento
   const regiao = REGIOES_SOLARES.find((r) => r.uf === projeto?.estado);
   const hsp = regiao ? regiao.hspMedio : 4.5;
   const eficienciaSistema = 0.75;
   const potenciaPicoWp =
     hsp > 0 ? consumoDiarioWh / (hsp * eficienciaSistema) : 0;
 
-  const valorPlaca = projeto?.potenciaPlaca || 550;
+  const valorPlaca = parseFloat(projeto?.potenciaPlaca) || 550;
   const qtdPlacas = Math.ceil(potenciaPicoWp / valorPlaca);
   const inversorKw = potenciaPicoWp / 1000;
 
-  // 3. Baterias (Se for Off-Grid)
-  const valorBateria = projeto?.capacidadeBateria || 220;
+  const valorBateria = parseFloat(projeto?.capacidadeBateria) || 220;
   const tensaoBancoV = 24;
   const diasAutonomia = 2;
   const profundidadeDescarga = 0.5;
   const capacidadeBateriasAh =
     (consumoDiarioWh * diasAutonomia) / (tensaoBancoV * profundidadeDescarga);
-  const qtdBateriasSerie = tensaoBancoV / 12;
+  const qtdBateriasSerie = Math.ceil(tensaoBancoV / 12);
   const qtdStringsParalelo = Math.ceil(capacidadeBateriasAh / valorBateria);
   const totalBaterias = qtdBateriasSerie * qtdStringsParalelo;
 
-  // 4. Preços Dinâmicos
-  const getPreco = (id: string) =>
-    tabelaPrecos.find((p) => p.id === id)?.precoMedio || 0;
+  const getPreco = (idBusca: string, fallback: number) => {
+    const item = tabelaPrecos.find((p) => p.id === idBusca);
+    return item ? parseFloat(String(item.precoMedio)) : fallback;
+  };
 
-  // Função para pegar preço específico da placa ou fallback
-  const getPrecoPlaca = () => {
-    const buscaExata = tabelaPrecos.find(
+  const idPlacaDinamico =
+    tabelaPrecos.find(
       (p) =>
         p.id === `mod_${valorPlaca}w` ||
         p.nome.toLowerCase().includes(`${valorPlaca}w`) ||
-        p.nome.toLowerCase().includes(`${valorPlaca} W`),
-    );
-    return buscaExata ? buscaExata.precoMedio : getPreco("mod_550w") || 680;
-  };
+        p.nome.toLowerCase().includes(`${valorPlaca} w`),
+    )?.id || `mod_${valorPlaca}w`;
 
-  const pPlaca = getPrecoPlaca();
-  const pInversor = !projeto.temRede
-    ? getPreco("inv_off_3kw")
-    : inversorKw <= 3
-      ? getPreco("inv_3kw")
-      : inversorKw <= 5
-        ? getPreco("inv_5kw")
-        : getPreco("inv_10kw");
-  const pEstrutura = getPreco("est_ceramico");
-  const pStringBox = getPreco("string_box_1");
-  const pConector = getPreco("conector_mc4");
-  const pBateria = getPreco("bat_est_220ah");
+  const pPlaca =
+    tabelaPrecos.find((p) => p.id === idPlacaDinamico)?.precoMedio || 680;
+  const pEstrutura = getPreco("est_ceramico", 350);
+  const pStringBox = getPreco("string_box_1", 350);
+  const pConector = getPreco("conector_mc4", 15);
+  const pBateria = getPreco("bat_est_220ah", 1600);
+
+  let pInversor = 0;
+  let idInversor = "";
+  if (!projeto?.temRede) {
+    idInversor = "inv_off_3kw";
+    pInversor = getPreco("inv_off_3kw", 3900);
+  } else {
+    if (inversorKw <= 3) {
+      idInversor = "inv_3kw";
+      pInversor = getPreco("inv_3kw", 2800);
+    } else if (inversorKw <= 5) {
+      idInversor = "inv_5kw";
+      pInversor = getPreco("inv_5kw", 3900);
+    } else {
+      idInversor = "inv_10kw";
+      pInversor = getPreco("inv_10kw", 7500);
+    }
+  }
 
   let valorTotalBoM = 0;
   if (qtdPlacas > 0) {
     valorTotalBoM += qtdPlacas * pPlaca;
     valorTotalBoM += Math.ceil(qtdPlacas / 4) * pEstrutura;
-    if (projeto.temRede) valorTotalBoM += 1 * pStringBox;
+    if (projeto?.temRede) valorTotalBoM += 1 * pStringBox;
     valorTotalBoM += 2 * pConector;
   }
   if (inversorKw > 0) {
-    if (!projeto.temRede) {
-      valorTotalBoM += 1 * getPreco("inv_off_3kw");
+    valorTotalBoM += 1 * pInversor;
+    if (!projeto?.temRede) {
       valorTotalBoM += totalBaterias * pBateria;
-    } else {
-      valorTotalBoM += 1 * pInversor;
     }
   }
+
+  const maoDeObra = parseFloat(projeto?.maoDeObra) || 0;
+  const valorTotalProjeto = valorTotalBoM + maoDeObra;
 
   return {
     consumoDiarioWh,
@@ -92,6 +104,10 @@ export function calcularSistema(projeto: any, tabelaPrecos: MaterialBase[]) {
     inversorKw,
     totalBaterias,
     valorTotalBoM,
+    maoDeObra,
+    valorTotalProjeto,
     precos: { pPlaca, pInversor, pEstrutura, pStringBox, pConector, pBateria },
+    idPlacaDinamico,
+    idInversor,
   };
 }

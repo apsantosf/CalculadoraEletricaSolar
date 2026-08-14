@@ -7,6 +7,7 @@ import * as Sharing from "expo-sharing";
 import { useCallback, useState } from "react";
 import {
   Alert,
+  Keyboard,
   Platform,
   ScrollView,
   StyleSheet,
@@ -15,7 +16,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 import CustomHeader from "../components/ui/CustomHeader";
 import { MaterialBase } from "../data/tabelaMateriais";
 import { calcularSistema } from "../utils/calculoSolar";
@@ -26,6 +26,7 @@ const CHAVE_CARRINHO = "@EletricaSolar_Carrinho_V1";
 const CHAVE_CIDADE = "@EletricaSolar_Cidade";
 
 export default function ScreenOrcamento() {
+  const [projeto, setProjeto] = useState<any>(null);
   const [quantidades, setQuantidades] = useState<Record<string, number>>({});
   const [tabelaPrecos, setTabelaPrecos] = useState<MaterialBase[]>([]);
   const [mostrarTodos, setMostrarTodos] = useState(false);
@@ -41,28 +42,24 @@ export default function ScreenOrcamento() {
         if (cidadeSalva) setCidade(cidadeSalva);
 
         let quantidadesAtuais: Record<string, number> = {};
-        const carrinhoSalvo = await AsyncStorage.getItem(CHAVE_CARRINHO);
-        if (carrinhoSalvo) quantidadesAtuais = JSON.parse(carrinhoSalvo);
-
         const proj = await carregarProjetoAtivo();
+
         if (proj) {
+          setProjeto(proj);
           const resultado = calcularSistema(proj, precos);
-          const { qtdPlacas, inversorKw, totalBaterias } = resultado;
-          const sistemaIsolado = !proj.temRede;
-          const valorPlaca = proj.potenciaPlaca || 550;
+          const { qtdPlacas, idPlacaDinamico, idInversor, totalBaterias } =
+            resultado;
 
-          // Identifica o ID exato da placa ativa
-          const idPlacaDinamico =
-            precos.find(
-              (p) =>
-                p.id === `mod_${valorPlaca}w` ||
-                p.nome.toLowerCase().includes(`${valorPlaca}w`) ||
-                p.nome.toLowerCase().includes(`${valorPlaca} W`),
-            )?.id || `mod_${valorPlaca}w`;
-
-          // 💡 Zera todos os outros módulos da tabela para evitar duplicidade fantasma
+          // Limpa todos os fantasmas do carrinho
           precos.forEach((item) => {
-            if (item.id.startsWith("mod_") || item.categoria === "modulo") {
+            if (
+              item.id.startsWith("mod_") ||
+              item.id.startsWith("inv_") ||
+              item.id === "est_ceramico" ||
+              item.id === "string_box_1" ||
+              item.id === "conector_mc4" ||
+              item.id === "bat_est_220ah"
+            ) {
               quantidadesAtuais[item.id] = 0;
             }
           });
@@ -70,25 +67,14 @@ export default function ScreenOrcamento() {
           if (qtdPlacas > 0) {
             quantidadesAtuais[idPlacaDinamico] = qtdPlacas;
             quantidadesAtuais["est_ceramico"] = Math.ceil(qtdPlacas / 4);
-            if (!sistemaIsolado) {
-              quantidadesAtuais["string_box_1"] = 1;
-            }
+            if (proj.temRede) quantidadesAtuais["string_box_1"] = 1;
             quantidadesAtuais["conector_mc4"] = 2;
           }
 
-          if (inversorKw > 0) {
-            if (sistemaIsolado) {
-              quantidadesAtuais["inv_off_3kw"] = 1;
+          if (resultado.inversorKw > 0) {
+            quantidadesAtuais[idInversor] = 1;
+            if (!proj.temRede)
               quantidadesAtuais["bat_est_220ah"] = totalBaterias;
-            } else {
-              // Zera inversores antigos antes de definir o novo
-              ["inv_3kw", "inv_5kw", "inv_10kw"].forEach((invId) => {
-                quantidadesAtuais[invId] = 0;
-              });
-              if (inversorKw <= 3) quantidadesAtuais["inv_3kw"] = 1;
-              else if (inversorKw <= 5) quantidadesAtuais["inv_5kw"] = 1;
-              else quantidadesAtuais["inv_10kw"] = 1;
-            }
           }
         }
 
@@ -114,20 +100,22 @@ export default function ScreenOrcamento() {
     );
   };
 
-  const valorTotal = tabelaPrecos.reduce(
+  const valorTotalEquipamentos = tabelaPrecos.reduce(
     (acc, item) => acc + (quantidades[item.id] || 0) * (item.precoMedio || 0),
     0,
   );
+  const maoDeObra = parseFloat(projeto?.maoDeObra) || 0;
+  const valorTotal = valorTotalEquipamentos + maoDeObra;
 
   const materiaisVisiveis = [...tabelaPrecos]
     .filter((item) => mostrarTodos || (quantidades[item.id] || 0) > 0)
-    .sort((a, b) => {
-      const categoriaA = a.categoria || "";
-      const categoriaB = b.categoria || "";
-      return categoriaA.localeCompare(categoriaB, "pt-BR");
-    });
+    .sort((a, b) =>
+      (a.categoria || "").localeCompare(b.categoria || "", "pt-BR"),
+    );
 
   const gerarPdfOrcamento = async () => {
+    Keyboard.dismiss();
+
     try {
       const itensHtml = materiaisVisiveis
         .map((item) => {
@@ -155,6 +143,18 @@ export default function ScreenOrcamento() {
         })
         .join("");
 
+      const linhaMaoDeObra =
+        maoDeObra > 0
+          ? `
+        <tr>
+          <td style="padding: 12px 10px; border-bottom: 1px solid #e5e7eb; color: #1f2937; font-size: 14px; font-weight: bold;">Serviço de Instalação (Mão de Obra)</td>
+          <td style="padding: 12px 10px; border-bottom: 1px solid #e5e7eb; text-align: center; color: #4b5563; font-size: 14px;">1 serv</td>
+          <td style="padding: 12px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; color: #4b5563; font-size: 14px;">R$ ${maoDeObra.toFixed(2).replace(".", ",")}</td>
+          <td style="padding: 12px 10px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: bold; color: #059669; font-size: 14px;">R$ ${maoDeObra.toFixed(2).replace(".", ",")}</td>
+        </tr>
+      `
+          : "";
+
       const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -179,17 +179,8 @@ export default function ScreenOrcamento() {
               <div class="subtitle">Projeto: ${cidade}</div>
             </div>
             <table>
-              <thead>
-                <tr>
-                  <th>Equipamento / Material</th>
-                  <th>Qtd</th>
-                  <th>Preço Unit.</th>
-                  <th>Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${itensHtml}
-              </tbody>
+              <thead><tr><th>Equipamento / Material</th><th>Qtd</th><th>Preço Unit.</th><th>Subtotal</th></tr></thead>
+              <tbody>${itensHtml}${linhaMaoDeObra}</tbody>
             </table>
             <div class="total-box">
               VALOR TOTAL ESTIMADO: R$ ${valorTotal.toFixed(2).replace(".", ",")}
@@ -199,20 +190,26 @@ export default function ScreenOrcamento() {
       `;
 
       if (Platform.OS === "web") {
-        const printWindow = window.open("", "_blank");
-        if (printWindow) {
-          printWindow.document.write(htmlContent);
-          printWindow.document.close();
-          printWindow.focus();
-          printWindow.print();
-        }
+        // 💡 BOLHA ISOLADA: A impressora roda fora do App. Adeus travamentos!
+        const htmlComScript = htmlContent.replace(
+          "</body>",
+          "<script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script></body>",
+        );
+        const blob = new Blob([htmlComScript], {
+          type: "text/html;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer"; // Quebra o vínculo com a janela principal
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       } else {
         const { uri } = await Print.printToFileAsync({ html: htmlContent });
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(uri);
-        } else {
-          Alert.alert("Sucesso", "PDF gerado!");
-        }
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
+        else Alert.alert("Sucesso", "PDF gerado!");
       }
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
@@ -222,18 +219,13 @@ export default function ScreenOrcamento() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-
       <CustomHeader
         title="Orçamento Financeiro"
         onBackPress={() => {
-          if (mostrarTodos) {
-            setMostrarTodos(false);
-          } else {
-            router.back();
-          }
+          if (mostrarTodos) setMostrarTodos(false);
+          else router.back();
         }}
       />
-
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.content}
@@ -241,7 +233,6 @@ export default function ScreenOrcamento() {
         <View style={styles.cabecalhoSecao}>
           <Text style={styles.tituloSecao}>Itens do Gerador Fotovoltaico</Text>
         </View>
-
         {materiaisVisiveis.map((item) => {
           const qtdAtual = quantidades[item.id] || 0;
           const preco = item.precoMedio || 0;
@@ -254,7 +245,6 @@ export default function ScreenOrcamento() {
                 : item.medida === "kit"
                   ? "conjs"
                   : "und";
-
           return (
             <View key={item.id} style={styles.cardMaterial}>
               <View style={styles.infoMaterial}>
@@ -284,6 +274,25 @@ export default function ScreenOrcamento() {
           );
         })}
 
+        {maoDeObra > 0 && (
+          <View
+            style={[
+              styles.cardMaterial,
+              { borderLeftWidth: 4, borderLeftColor: "#F59E0B" },
+            ]}
+          >
+            <View style={styles.infoMaterial}>
+              <Text style={styles.nomeMaterial}>Serviço de Instalação</Text>
+              <Text style={styles.precoUnidade}>Mão de Obra</Text>
+            </View>
+            <View style={[styles.controles, { justifyContent: "center" }]}>
+              <Text style={styles.textoSubtotal}>
+                R$ {maoDeObra.toFixed(2).replace(".", ",")}
+              </Text>
+            </View>
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.botaoMostrarMais}
           onPress={() => setMostrarTodos(!mostrarTodos)}
@@ -294,7 +303,6 @@ export default function ScreenOrcamento() {
               : "+ Adicionar Outros Materiais"}
           </Text>
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.botaoPdf} onPress={gerarPdfOrcamento}>
           <FontAwesome5
             name="file-pdf"
@@ -307,7 +315,12 @@ export default function ScreenOrcamento() {
       </ScrollView>
 
       <View style={styles.footerTotal}>
-        <Text style={styles.textoTotalLabel}>Total dos Equipamentos:</Text>
+        <View>
+          <Text style={styles.textoTotalLabel}>Total do Projeto:</Text>
+          <Text style={{ color: "#E0F2FE", fontSize: 12 }}>
+            Equipamentos + Mão de Obra
+          </Text>
+        </View>
         <Text style={styles.textoTotalValor}>
           R$ {valorTotal.toFixed(2).replace(".", ",")}
         </Text>

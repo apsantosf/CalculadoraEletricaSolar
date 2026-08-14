@@ -1,10 +1,11 @@
 // src/app/(tabs)/materiais.tsx
 import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Link, useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   Alert,
+  Keyboard,
   Modal,
   Platform,
   ScrollView,
@@ -15,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { MaterialBase } from "../../data/tabelaMateriais";
-import { calcularSistema } from "../../utils/calculoSolar"; // 💡 NOSSO MOTOR CENTRAL INTEGRADO
+import { calcularSistema } from "../../utils/calculoSolar";
 import { carregarProjetoAtivo } from "../../utils/storage";
 import {
   obterPrecosLocais,
@@ -25,15 +26,15 @@ import {
 const CHAVE_CIDADE = "@EletricaSolar_Cidade";
 
 export default function MateriaisScreen() {
+  const router = useRouter();
+
   const [projeto, setProjeto] = useState<any>(null);
   const [tabelaPrecos, setTabelaPrecos] = useState<MaterialBase[]>([]);
   const [cidade, setCidade] = useState<string>("Projeto Atual");
 
   const [inputPotenciaPlaca, setInputPotenciaPlaca] = useState("");
   const [inputCapacidadeBateria, setInputCapacidadeBateria] = useState("");
-
-  const clicouNoBotaoPlaca = useRef(false);
-  const clicouNoBotaoBateria = useRef(false);
+  const [inputMaoDeObra, setInputMaoDeObra] = useState("");
 
   const [modalVisivel, setModalVisivel] = useState(false);
   const [precosEmEdicao, setPrecosEmEdicao] = useState<MaterialBase[]>([]);
@@ -46,19 +47,37 @@ export default function MateriaisScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      let isActive = true;
       const fetchDados = async () => {
         const proj = await carregarProjetoAtivo();
-        setProjeto(proj);
-
-        setInputPotenciaPlaca(String(proj?.potenciaPlaca || 550));
-        setInputCapacidadeBateria(String(proj?.capacidadeBateria || 220));
-
         const precos = await obterPrecosLocais();
-        setTabelaPrecos(precos);
         const cidadeSalva = await AsyncStorage.getItem(CHAVE_CIDADE);
-        if (cidadeSalva) setCidade(cidadeSalva);
+
+        if (!isActive) return;
+
+        setProjeto((prevProjeto: any) => {
+          const projetoMudou =
+            JSON.stringify(prevProjeto) !== JSON.stringify(proj);
+          if (projetoMudou) {
+            setInputPotenciaPlaca(String(proj?.potenciaPlaca || 550));
+            setInputCapacidadeBateria(String(proj?.capacidadeBateria || 220));
+            setInputMaoDeObra(String(proj?.maoDeObra || 0));
+            return proj;
+          }
+          return prevProjeto;
+        });
+
+        setTabelaPrecos((prev) =>
+          JSON.stringify(prev) !== JSON.stringify(precos) ? precos : prev,
+        );
+        if (cidadeSalva)
+          setCidade((prev) => (prev !== cidadeSalva ? cidadeSalva : prev));
       };
+
       fetchDados();
+      return () => {
+        isActive = false;
+      };
     }, []),
   );
 
@@ -71,148 +90,40 @@ export default function MateriaisScreen() {
     );
   };
 
-  const validarPotenciaPlaca = () => {
-    const num = parseFloat(inputPotenciaPlaca.replace(",", "."));
-    if (isNaN(num) || num <= 0) {
-      Platform.OS === "web"
-        ? window.alert("A potência da placa não pode ficar vazia ou zerada!")
-        : Alert.alert(
-            "Atenção",
-            "A potência da placa não pode ficar vazia ou zerada!",
-          );
-      setInputPotenciaPlaca(String(projeto?.potenciaPlaca || 550));
-      return;
-    }
-
-    const idBusca = `mod_${num}w`;
-    const itemEncontrado = tabelaPrecos.find(
-      (p) =>
-        p.id === idBusca ||
-        p.nome.toLowerCase().includes(`${num}w`) ||
-        p.nome.toLowerCase().includes(`${num} W`),
-    );
-
-    if (!itemEncontrado) {
-      const mensagem = `Não encontramos um Módulo de ${num}W na sua Tabela de Preços. Deseja cadastrá-lo agora?`;
-
-      if (Platform.OS === "web") {
-        if (window.confirm(mensagem)) {
-          abrirConfiguracaoPrecosComPreenchimentoAuto(
-            `Módulo Solar Fotovoltaico ${num}W`,
-            idBusca,
-          );
-        } else {
-          setInputPotenciaPlaca(String(projeto?.potenciaPlaca || 550));
-        }
-      } else {
-        Alert.alert("Produto Não Cadastrado", mensagem, [
-          {
-            text: "Cancelar",
-            onPress: () =>
-              setInputPotenciaPlaca(String(projeto?.potenciaPlaca || 550)),
-            style: "cancel",
-          },
-          {
-            text: "Cadastrar",
-            onPress: () =>
-              abrirConfiguracaoPrecosComPreenchimentoAuto(
-                `Módulo Solar Fotovoltaico ${num}W`,
-                idBusca,
-              ),
-          },
-        ]);
-      }
-      return;
-    }
-
+  const aplicarPlaca = () => {
+    Keyboard.dismiss();
+    const num = parseFloat(inputPotenciaPlaca.replace(",", ".")) || 550;
     salvarAlteracoes({ potenciaPlaca: num });
     setInputPotenciaPlaca(String(num));
   };
 
-  const validarCapacidadeBateria = () => {
-    const num = parseFloat(inputCapacidadeBateria.replace(",", "."));
-    if (isNaN(num) || num <= 0) {
-      Platform.OS === "web"
-        ? window.alert(
-            "A capacidade da bateria não pode ficar vazia ou zerada!",
-          )
-        : Alert.alert(
-            "Atenção",
-            "A capacidade da bateria não pode ficar vazia ou zerada!",
-          );
-      setInputCapacidadeBateria(String(projeto?.capacidadeBateria || 220));
-    } else {
-      salvarAlteracoes({ capacidadeBateria: num });
-      setInputCapacidadeBateria(String(num));
-    }
+  const aplicarBateria = () => {
+    Keyboard.dismiss();
+    const num = parseFloat(inputCapacidadeBateria.replace(",", ".")) || 220;
+    salvarAlteracoes({ capacidadeBateria: num });
+    setInputCapacidadeBateria(String(num));
   };
 
-  const lidarComPerdaFocoPlaca = () => {
-    setTimeout(() => {
-      if (clicouNoBotaoPlaca.current) {
-        clicouNoBotaoPlaca.current = false;
-        return;
-      }
-
-      const placaAlterada =
-        inputPotenciaPlaca !== String(projeto?.potenciaPlaca || 550);
-      if (placaAlterada) {
-        if (Platform.OS === "web") {
-          window.alert(
-            "Você alterou a potência da placa, mas não clicou no botão de recalcular. O valor será aplicado agora.",
-          );
-          validarPotenciaPlaca();
-        } else {
-          Alert.alert(
-            "Alteração Pendente",
-            "Você alterou a potência, mas não clicou em Recalcular. Deseja aplicar?",
-            [
-              {
-                text: "Descartar",
-                onPress: () =>
-                  setInputPotenciaPlaca(String(projeto?.potenciaPlaca || 550)),
-              },
-              { text: "Aplicar", onPress: validarPotenciaPlaca },
-            ],
-          );
-        }
-      }
-    }, 200);
+  const aplicarMaoDeObra = () => {
+    Keyboard.dismiss();
+    const num = parseFloat(inputMaoDeObra.replace(",", ".")) || 0;
+    salvarAlteracoes({ maoDeObra: num });
+    setInputMaoDeObra(String(num));
   };
 
-  const lidarComPerdaFocoBateria = () => {
-    setTimeout(() => {
-      if (clicouNoBotaoBateria.current) {
-        clicouNoBotaoBateria.current = false;
-        return;
-      }
+  const irParaOrcamento = async () => {
+    Keyboard.dismiss();
+    const numP = parseFloat(inputPotenciaPlaca.replace(",", ".")) || 550;
+    const numB = parseFloat(inputCapacidadeBateria.replace(",", ".")) || 220;
+    const numM = parseFloat(inputMaoDeObra.replace(",", ".")) || 0;
 
-      const bateriaAlterada =
-        inputCapacidadeBateria !== String(projeto?.capacidadeBateria || 220);
-      if (bateriaAlterada) {
-        if (Platform.OS === "web") {
-          window.alert(
-            "Você alterou a capacidade da bateria, mas não clicou no botão de recalcular. O valor será aplicado agora.",
-          );
-          validarCapacidadeBateria();
-        } else {
-          Alert.alert(
-            "Alteração Pendente",
-            "Você alterou a bateria, mas não clicou em Recalcular. Deseja aplicar?",
-            [
-              {
-                text: "Descartar",
-                onPress: () =>
-                  setInputCapacidadeBateria(
-                    String(projeto?.capacidadeBateria || 220),
-                  ),
-              },
-              { text: "Aplicar", onPress: validarCapacidadeBateria },
-            ],
-          );
-        }
-      }
-    }, 200);
+    // Força gravação exata antes de mudar de tela!
+    await salvarAlteracoes({
+      potenciaPlaca: numP,
+      capacidadeBateria: numB,
+      maoDeObra: numM,
+    });
+    router.push("/orcamento");
   };
 
   const abrirConfiguracaoPrecos = () => {
@@ -279,36 +190,36 @@ export default function MateriaisScreen() {
     }
     setModalVisivel(false);
     Platform.OS === "web"
-      ? window.alert("Sua tabela de preços foi atualizada!")
-      : Alert.alert("Sucesso", "Sua tabela de preços foi atualizada!");
+      ? window.alert("Sua tabela foi atualizada!")
+      : Alert.alert("Sucesso", "Tabela atualizada!");
   };
 
   if (!projeto) {
     return (
       <View style={styles.container}>
-        <Text style={styles.txtCarregando}>Carregando lista...</Text>
+        <Text style={styles.txtCarregando}>Carregando...</Text>
       </View>
     );
   }
 
-  // 💡 USANDO O NOSSO MOTOR CENTRALIZADO DE CÁLCULO
   const resultado = calcularSistema(projeto, tabelaPrecos);
   const {
     potenciaPicoWp,
     qtdPlacas,
     inversorKw,
     totalBaterias,
-    valorTotalBoM,
+    valorTotalProjeto,
     precos: { pPlaca, pInversor, pEstrutura, pStringBox, pConector, pBateria },
   } = resultado;
 
-  const valorPlaca = projeto?.potenciaPlaca || 550;
-  const valorBateria = projeto?.capacidadeBateria || 220;
+  const valorPlaca = parseFloat(projeto?.potenciaPlaca) || 550;
+  const valorBateria = parseFloat(projeto?.capacidadeBateria) || 220;
 
   const placaAlterada =
     inputPotenciaPlaca !== String(projeto?.potenciaPlaca || 550);
   const bateriaAlterada =
     inputCapacidadeBateria !== String(projeto?.capacidadeBateria || 220);
+  const maoDeObraAlterada = inputMaoDeObra !== String(projeto?.maoDeObra || 0);
 
   return (
     <ScrollView
@@ -317,14 +228,7 @@ export default function MateriaisScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.cardConfig}>
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 16,
-          }}
-        >
+        <View style={styles.cabecalhoConfig}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <MaterialCommunityIcons
               name="cog-outline"
@@ -351,7 +255,6 @@ export default function MateriaisScreen() {
               keyboardType="numeric"
               value={inputPotenciaPlaca}
               onChangeText={setInputPotenciaPlaca}
-              onBlur={lidarComPerdaFocoPlaca}
               placeholder="Ex: 550"
             />
             <TouchableOpacity
@@ -362,13 +265,10 @@ export default function MateriaisScreen() {
                   : styles.botaoRecalcularInativo,
               ]}
               disabled={!placaAlterada}
-              onPressIn={() => {
-                clicouNoBotaoPlaca.current = true;
-              }}
-              onPress={validarPotenciaPlaca}
+              onPress={aplicarPlaca}
             >
               <MaterialCommunityIcons
-                name="refresh"
+                name="check"
                 size={18}
                 color={placaAlterada ? "#FFF" : "#94A3B8"}
               />
@@ -378,14 +278,13 @@ export default function MateriaisScreen() {
 
         {!projeto?.temRede && (
           <View style={[styles.inputRow, { marginTop: 15 }]}>
-            <Text style={styles.label}>Capacidade da Bateria 12V (Ah):</Text>
+            <Text style={styles.label}>Cap. da Bateria 12V (Ah):</Text>
             <View style={styles.grupoInputRecalcular}>
               <TextInput
                 style={styles.inputComBotao}
                 keyboardType="numeric"
                 value={inputCapacidadeBateria}
                 onChangeText={setInputCapacidadeBateria}
-                onBlur={lidarComPerdaFocoBateria}
                 placeholder="Ex: 220"
               />
               <TouchableOpacity
@@ -396,13 +295,10 @@ export default function MateriaisScreen() {
                     : styles.botaoRecalcularInativo,
                 ]}
                 disabled={!bateriaAlterada}
-                onPressIn={() => {
-                  clicouNoBotaoBateria.current = true;
-                }}
-                onPress={validarCapacidadeBateria}
+                onPress={aplicarBateria}
               >
                 <MaterialCommunityIcons
-                  name="refresh"
+                  name="check"
                   size={18}
                   color={bateriaAlterada ? "#FFF" : "#94A3B8"}
                 />
@@ -410,6 +306,35 @@ export default function MateriaisScreen() {
             </View>
           </View>
         )}
+
+        <View style={[styles.inputRow, { marginTop: 15 }]}>
+          <Text style={styles.label}>Mão de Obra (R$):</Text>
+          <View style={styles.grupoInputRecalcular}>
+            <TextInput
+              style={styles.inputComBotao}
+              keyboardType="numeric"
+              value={inputMaoDeObra}
+              onChangeText={setInputMaoDeObra}
+              placeholder="Ex: 1500"
+            />
+            <TouchableOpacity
+              style={[
+                styles.botaoRecalcular,
+                maoDeObraAlterada
+                  ? styles.botaoRecalcularAtivo
+                  : styles.botaoRecalcularInativo,
+              ]}
+              disabled={!maoDeObraAlterada}
+              onPress={aplicarMaoDeObra}
+            >
+              <MaterialCommunityIcons
+                name="check"
+                size={18}
+                color={maoDeObraAlterada ? "#FFF" : "#94A3B8"}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       <View style={styles.cardLista}>
@@ -472,7 +397,7 @@ export default function MateriaisScreen() {
           <View style={styles.infoMaterial}>
             <Text style={styles.nomeMaterial}>Estrutura de Fixação</Text>
             <Text style={styles.detalheMaterial}>
-              Trilhos e ganchos dimensionados para {qtdPlacas} módulos.
+              Trilhos e ganchos dimensionados.
             </Text>
             <Text style={styles.precoUnitario}>
               R$ {pEstrutura.toFixed(2).replace(".", ",")} / conj.
@@ -518,7 +443,7 @@ export default function MateriaisScreen() {
           <View style={styles.infoMaterial}>
             <Text style={styles.nomeMaterial}>Cabeamento e Conectores</Text>
             <Text style={styles.detalheMaterial}>
-              Cabos solares e pares de conectores MC4 padrão.
+              Cabos solares e conectores MC4 padrão.
             </Text>
             <Text style={styles.precoUnitario}>
               Ref: R$ {pConector.toFixed(2).replace(".", ",")} / par
@@ -540,7 +465,7 @@ export default function MateriaisScreen() {
             <View style={styles.infoMaterial}>
               <Text style={styles.nomeMaterial}>Banco de Baterias (12V)</Text>
               <Text style={styles.detalheMaterial}>
-                Baterias de {valorBateria}Ah conectadas para fechar 24V.
+                Baterias conectadas para fechar 24V.
               </Text>
               <Text style={styles.precoUnitario}>
                 R$ {pBateria.toFixed(2).replace(".", ",")} / und
@@ -561,19 +486,21 @@ export default function MateriaisScreen() {
       </View>
 
       <View style={{ marginTop: 25, marginBottom: 10, paddingHorizontal: 10 }}>
-        <Link href="/orcamento" asChild>
-          <TouchableOpacity style={styles.botaoOrcamento} activeOpacity={0.8}>
-            <FontAwesome5
-              name="file-invoice-dollar"
-              size={20}
-              color="#FFF"
-              style={{ marginRight: 10 }}
-            />
-            <Text style={styles.textoBotaoOrcamento}>
-              Ver Orçamento: R$ {valorTotalBoM.toFixed(2).replace(".", ",")}
-            </Text>
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity
+          style={styles.botaoOrcamento}
+          activeOpacity={0.8}
+          onPress={irParaOrcamento}
+        >
+          <FontAwesome5
+            name="file-invoice-dollar"
+            size={20}
+            color="#FFF"
+            style={{ marginRight: 10 }}
+          />
+          <Text style={styles.textoBotaoOrcamento}>
+            Ver Orçamento: R$ {valorTotalProjeto.toFixed(2).replace(".", ",")}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <Modal
@@ -603,47 +530,8 @@ export default function MateriaisScreen() {
                 <FontAwesome5 name="times" size={20} color="#6b7280" />
               </TouchableOpacity>
             </View>
-
-            <View style={styles.cardNovoItem}>
-              <Text style={styles.tituloNovoItem}>
-                ➕ Cadastrar Novo Material
-              </Text>
-              <TextInput
-                style={styles.inputNovoNome}
-                placeholder="Ex: Trilho de Alumínio 4,40m"
-                value={novoNomeItem}
-                onChangeText={setNovoNomeItem}
-              />
-              <View style={styles.rowNovoItem}>
-                <TextInput
-                  style={styles.inputNovoPreco}
-                  placeholder="Preço (R$)"
-                  keyboardType="numeric"
-                  value={novoPrecoItem}
-                  onChangeText={setNovoPrecoItem}
-                />
-                <TouchableOpacity
-                  style={styles.botaoAdicionarNovoItem}
-                  onPress={adicionarItemCustomizado}
-                >
-                  <Text style={styles.textoBotaoAdicionarNovo}>Adicionar</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
             <ScrollView style={styles.modalScroll}>
-              <Text style={styles.subtituloEdicaoPrecos}>
-                Sua Tabela de Preços Atuais (Ordem Alfabética):
-              </Text>
               {precosEmEdicao.map((item) => {
-                const sufixo =
-                  item.medida === "metro"
-                    ? "m"
-                    : item.medida === "par"
-                      ? "prs"
-                      : item.medida === "kit"
-                        ? "conjs"
-                        : "und";
                 const precoFormatado = (item.precoMedio || 0)
                   .toString()
                   .replace(".", ",");
@@ -660,13 +548,11 @@ export default function MateriaisScreen() {
                           atualizarPrecoEditado(item.id, texto)
                         }
                       />
-                      <Text style={styles.modalSufixo}>/ {sufixo}</Text>
                     </View>
                   </View>
                 );
               })}
             </ScrollView>
-
             <TouchableOpacity
               style={styles.botaoSalvarModal}
               onPress={salvarNovosPrecos}
@@ -690,6 +576,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#BAE6FD",
     marginBottom: 20,
+  },
+  cabecalhoConfig: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
   },
   tituloCard: { fontSize: 15, fontWeight: "bold", color: "#0284C7" },
   botaoConfig: {

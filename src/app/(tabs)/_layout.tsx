@@ -45,7 +45,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             }
           }
 
-          if (route.name === "resultado" || route.name === "materiais") {
+          if (route.name === "memorial" || route.name === "materiais") {
             const isEquip =
               projetoAtivo?.tipoCalculo === "equipamentos" ||
               !projetoAtivo?.tipoCalculo;
@@ -98,7 +98,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         if (route.name === "inicio") iconName = "home-variant-outline";
         if (route.name === "carga") iconName = "format-list-checks";
         if (route.name === "materiais") iconName = "toolbox-outline";
-        if (route.name === "resultado") iconName = "file-document-outline";
+        if (route.name === "memorial") iconName = "file-document-outline";
 
         return (
           <TouchableOpacity
@@ -126,7 +126,7 @@ export default function TabLayout() {
       <Tabs.Screen name="inicio" options={{ title: "Início" }} />
       <Tabs.Screen name="carga" options={{ title: "Cargas" }} />
       <Tabs.Screen name="materiais" options={{ title: "Materiais" }} />
-      <Tabs.Screen name="resultado" options={{ title: "Memorial" }} />
+      <Tabs.Screen name="memorial" options={{ title: "Memorial" }} />
     </Tabs>
   );
 }
