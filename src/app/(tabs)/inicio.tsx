@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -481,9 +482,11 @@ export default function InicioScreen() {
         </Text>
         <TouchableOpacity
           style={styles.btnManual}
-          onPress={() => {
-            /* Cole aqui seu Linking do PDF depois */
-          }}
+          onPress={() =>
+            Linking.openURL(
+              "https://drive.google.com/file/d/1CGrskMd7bXegSEzePB0c0gwPUNkvT3a2/view?usp=sharing",
+            )
+          }
         >
           <MaterialCommunityIcons
             name="book-open-page-variant"
