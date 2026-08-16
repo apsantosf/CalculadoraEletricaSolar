@@ -34,7 +34,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         const onPress = async () => {
           const projetoAtivo = await carregarProjetoAtivo();
 
-          if (route.name === "carga") {
+          if (route.name === "cargas") {
             if (projetoAtivo?.tipoCalculo === "direto") {
               const msg =
                 "Você selecionou o Cálculo Direto. A lista de equipamentos não é necessária.";
@@ -96,7 +96,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
         let iconName: any = "help-circle";
         if (route.name === "inicio") iconName = "home-variant-outline";
-        if (route.name === "carga") iconName = "format-list-checks";
+        if (route.name === "cargas") iconName = "format-list-checks";
         if (route.name === "materiais") iconName = "toolbox-outline";
         if (route.name === "memorial") iconName = "file-document-outline";
 
@@ -124,7 +124,7 @@ export default function TabLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="inicio" options={{ title: "Início" }} />
-      <Tabs.Screen name="carga" options={{ title: "Cargas" }} />
+      <Tabs.Screen name="cargas" options={{ title: "Cargas" }} />
       <Tabs.Screen name="materiais" options={{ title: "Materiais" }} />
       <Tabs.Screen name="memorial" options={{ title: "Memorial" }} />
     </Tabs>

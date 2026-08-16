@@ -41,10 +41,14 @@ export default function MemorialScreen() {
   const isDireto = projeto?.tipoCalculo === "direto";
   const isMisto = projeto?.tipoCalculo === "misto";
 
-  const consumoBaseWh = ((projeto?.consumoDiretokWh || 0) * 1000) / 30;
+  const consumoBaseWh =
+    ((parseFloat(projeto?.consumoDiretokWh) || 0) * 1000) / 30;
   const consumoEquipamentosWh = (projeto?.inventario || []).reduce(
     (tot: number, item: any) =>
-      tot + item.potenciaW * item.quantidade * item.horasUsoDia,
+      tot +
+      (parseFloat(item.potenciaW) || 0) *
+        (parseFloat(item.quantidade) || 0) *
+        (parseFloat(item.horasUsoDia) || 0),
     0,
   );
 
@@ -71,9 +75,9 @@ export default function MemorialScreen() {
   const capacidadeBateriasAh =
     (consumoDiarioWh * diasAutonomia) / (tensaoBancoV * profundidadeDescarga);
 
-  const valorPlaca = projeto?.potenciaPlaca || 550;
+  const valorPlaca = parseFloat(projeto?.potenciaPlaca) || 550;
   const qtdPlacas = Math.ceil(potenciaPicoWp / valorPlaca);
-  const valorBateria = projeto?.capacidadeBateria || 220;
+  const valorBateria = parseFloat(projeto?.capacidadeBateria) || 220;
   const qtdBateriasSerie = tensaoBancoV / 12;
   const qtdStringsParalelo = Math.ceil(capacidadeBateriasAh / valorBateria);
   const totalBaterias = qtdBateriasSerie * qtdStringsParalelo;
@@ -174,52 +178,34 @@ export default function MemorialScreen() {
             <td>Trilhos e fixadores para ${qtdPlacas} módulos</td>
             <td>1 kit</td>
           </tr>
-          ${
-            projeto?.temRede
-              ? `
-          <tr>
-            <td class="left">Quadro de Proteção (String Box)</td>
-            <td>Proteção CA e CC integrada</td>
-            <td>1 un</td>
-          </tr>
-          `
-              : ""
-          }
+          ${projeto?.temRede ? `<tr><td class="left">Quadro de Proteção (String Box)</td><td>Proteção CA e CC integrada</td><td>1 un</td></tr>` : ""}
           <tr>
             <td class="left">Cabeamento e Conectores</td>
             <td>Cabos solares e conectores MC4 compatíveis</td>
             <td>1 kit</td>
           </tr>
-          ${
-            !projeto?.temRede
-              ? `
-          <tr>
-            <td class="left">Banco de Baterias (12V)</td>
-            <td>Capacidade unitária: ${valorBateria}Ah (Arranjo ${tensaoBancoV}V)</td>
-            <td>${totalBaterias} un</td>
-          </tr>
-          `
-              : ""
-          }
+          ${!projeto?.temRede ? `<tr><td class="left">Banco de Baterias (12V)</td><td>Capacidade unitária: ${valorBateria}Ah (Arranjo ${tensaoBancoV}V)</td><td>${totalBaterias} un</td></tr>` : ""}
         </table>
       `;
 
       const htmlOrientacoes = `
         <h2 class="section-title">5. Orientações Comerciais e Técnicas</h2>
         <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 8px; padding: 15px; margin-bottom: 20px; page-break-inside: avoid;">
-          
           <h4 style="margin: 0 0 8px 0; color: #1E293B; font-size: 13px;">Sobre o Sistema Conectado (On-Grid):</h4>
           <ul style="margin: 0 0 15px 0; padding-left: 20px; color: #475569; font-size: 11px;">
             <li><strong>Aprovação e Relógio:</strong> É obrigatório contratar um engenheiro para homologar o projeto junto à ${projeto?.estado ? "distribuidora local" : "concessionária"}. A concessionária fará a troca do seu relógio comum por um <strong>Medidor Bidirecional</strong>.</li>
-            <li><strong>Taxa Mínima:</strong> A conta de luz nunca vem "zerada". Você sempre pagará o Custo de Disponibilidade (Taxa Mínima), que varia conforme sua rede (Mono: 30kWh, Bi: 50kWh, Tri: 100kWh) mais a taxa de iluminação pública.</li>
-            <li><strong>Falta de Energia:</strong> Por questões de segurança (anti-ilhamento), se a energia da rua acabar, o sistema On-Grid desliga automaticamente. Ele não funciona como gerador reserva.</li>
+            <li><strong>Taxa Mínima:</strong> A conta de luz nunca vem "zerada". Você sempre pagará o Custo de Disponibilidade.</li>
+            <li><strong>Falta de Energia:</strong> Por questões de segurança (anti-ilhamento), se a energia da rua acabar, o sistema On-Grid desliga automaticamente.</li>
           </ul>
-
           <h4 style="margin: 0 0 8px 0; color: #1E293B; font-size: 13px;">Sobre o Sistema Isolado (Off-Grid):</h4>
-          <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 11px;">
+          <ul style="margin: 0 0 15px 0; padding-left: 20px; color: #475569; font-size: 11px;">
             <li><strong>Custo Financeiro:</strong> O investimento inicial costuma ser consideravelmente maior que o On-Grid devido ao alto custo do banco de baterias.</li>
-            <li><strong>Manutenção de Baterias:</strong> Baterias possuem vida útil limitada. Preveja a substituição do banco de baterias (chumbo-ácido ou lítio) a cada ciclo de 3 a 7 anos, dependendo do modelo e profundidade de descarga.</li>
+            <li><strong>Manutenção de Baterias:</strong> Preveja a substituição do banco de baterias (chumbo-ácido ou lítio) a cada ciclo de 3 a 7 anos.</li>
           </ul>
+          <h4 style="margin: 15px 0 8px 0; color: #1E293B; font-size: 13px;">Notas Legais e Normas Aplicáveis:</h4>
+          <p style="margin: 0; padding: 0; color: #475569; font-size: 11px;">
+            Orçamento estimado para fins comerciais. O dimensionamento técnico On-Grid segue as diretrizes do Marco Legal da Microgeração (Lei 14.300/2022) e está sujeito a variações de tarifas (Fio B) e taxas mínimas da concessionária local. A execução da instalação deverá obedecer rigorosamente às normas ABNT NBR 16690 e NBR 5410. A aprovação e troca do medidor dependem exclusivamente da concessionária de energia.
+          </p>
         </div>
       `;
 
@@ -355,7 +341,6 @@ export default function MemorialScreen() {
       `;
 
       if (Platform.OS === "web") {
-        // 💡 A BOLHA ISOLADA QUE SALVA A PÁTRIA (Não trava mais as outras abas!)
         const htmlComScript = html.replace(
           "</body>",
           "<script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script></body>",
@@ -367,7 +352,7 @@ export default function MemorialScreen() {
         const a = document.createElement("a");
         a.href = url;
         a.target = "_blank";
-        a.rel = "noopener noreferrer"; // Desliga a aba do PDF da nossa aba do App
+        a.rel = "noopener noreferrer";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -381,7 +366,6 @@ export default function MemorialScreen() {
       }
     } catch (error) {
       Alert.alert("Erro", "Não foi possível gerar o PDF.");
-      console.error(error);
     }
   };
 
@@ -459,7 +443,6 @@ export default function MemorialScreen() {
           bidirecional. A conta de luz não zera devido à cobrança da Taxa Mínima
           mensal de disponibilidade.
         </Text>
-
         <Text style={[styles.txtAvisoBold, { marginTop: 12 }]}>
           Sobre o Off-Grid (Isolado):
         </Text>
@@ -467,6 +450,19 @@ export default function MemorialScreen() {
           Custo inicial superior devido às baterias. Requer manutenção e troca
           do banco de baterias (ciclo médio de 3 a 7 anos dependendo da
           tecnologia).
+        </Text>
+
+        {/* TEXTO JURÍDICO INSERIDO AQUI NA TELA */}
+        <Text
+          style={[styles.txtAvisoBold, { marginTop: 15, color: "#EF4444" }]}
+        >
+          Notas Legais e Normas:
+        </Text>
+        <Text style={styles.txtAviso}>
+          O dimensionamento técnico segue as diretrizes do Marco Legal (Lei
+          14.300/2022). A execução deve obedecer às normas ABNT NBR 16690 e NBR
+          5410. A aprovação e troca do medidor dependem exclusivamente da
+          concessionária.
         </Text>
       </View>
 
@@ -486,7 +482,6 @@ export default function MemorialScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC", padding: 16 },
   txtCarregando: { textAlign: "center", marginTop: 50, color: "#64748B" },
-
   cardConsumoGeral: {
     backgroundColor: "#E0F2FE",
     padding: 20,
@@ -504,7 +499,6 @@ const styles = StyleSheet.create({
   },
   txtConsumoValor: { fontSize: 28, color: "#0369A1", fontWeight: "bold" },
   txtConsumoSub: { fontSize: 13, color: "#38BDF8", marginTop: 4 },
-
   tituloSecao: {
     fontSize: 16,
     fontWeight: "bold",
@@ -520,14 +514,10 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     marginBottom: 24,
     borderLeftWidth: 6,
-    // @ts-ignore
-    boxShadow:
-      Platform.OS === "web" ? "0px 2px 4px rgba(0,0,0,0.02)" : undefined,
     elevation: 2,
   },
   bordaVerde: { borderLeftColor: "#10B981" },
   bordaMarrom: { borderLeftColor: "#A8A29E" },
-
   txtDescricaoVeredito: {
     fontSize: 13,
     color: "#64748B",
@@ -535,7 +525,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 20,
   },
-
   linhaDado: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -550,7 +539,6 @@ const styles = StyleSheet.create({
   },
   labelDado: { fontSize: 14, color: "#475569" },
   valorDado: { fontSize: 15, fontWeight: "bold", color: "#0F172A" },
-
   cardAviso: {
     backgroundColor: "#F0F9FF",
     padding: 16,
@@ -566,7 +554,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   txtAviso: { fontSize: 13, color: "#0F172A", lineHeight: 20 },
-
   btnPdf: {
     backgroundColor: "#0056B3",
     padding: 16,

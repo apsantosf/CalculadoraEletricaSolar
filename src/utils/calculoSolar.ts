@@ -7,12 +7,13 @@ export function calcularSistema(projeto: any, tabelaPrecos: MaterialBase[]) {
   const isMisto = projeto?.tipoCalculo === "misto";
   const consumoBaseWh =
     ((parseFloat(projeto?.consumoDiretokWh) || 0) * 1000) / 30;
+
   const consumoEquipamentosWh = (projeto?.inventario || []).reduce(
     (tot: number, item: any) =>
       tot +
-      parseFloat(item.potenciaW) *
-        parseFloat(item.quantidade) *
-        parseFloat(item.horasUsoDia),
+      (parseFloat(item.potenciaW) || 0) *
+        (parseFloat(item.quantidade) || 0) *
+        (parseFloat(item.horasUsoDia) || 0),
     0,
   );
 

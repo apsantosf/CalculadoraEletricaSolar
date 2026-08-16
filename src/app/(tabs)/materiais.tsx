@@ -23,14 +23,11 @@ import {
   salvarPrecosLocais,
 } from "../../utils/storagePrecos";
 
-const CHAVE_CIDADE = "@EletricaSolar_Cidade";
-
 export default function MateriaisScreen() {
   const router = useRouter();
 
   const [projeto, setProjeto] = useState<any>(null);
   const [tabelaPrecos, setTabelaPrecos] = useState<MaterialBase[]>([]);
-  const [cidade, setCidade] = useState<string>("Projeto Atual");
 
   const [inputPotenciaPlaca, setInputPotenciaPlaca] = useState("");
   const [inputCapacidadeBateria, setInputCapacidadeBateria] = useState("");
@@ -38,12 +35,8 @@ export default function MateriaisScreen() {
 
   const [modalVisivel, setModalVisivel] = useState(false);
   const [precosEmEdicao, setPrecosEmEdicao] = useState<MaterialBase[]>([]);
-  const [cidadeEmEdicao, setCidadeEmEdicao] = useState<string>("");
   const [novoNomeItem, setNovoNomeItem] = useState("");
   const [novoPrecoItem, setNovoPrecoItem] = useState("");
-  const [novaMedidaItem, setNovaMedidaItem] = useState<
-    "unidade" | "metro" | "kit" | "par"
-  >("unidade");
 
   useFocusEffect(
     useCallback(() => {
@@ -51,7 +44,6 @@ export default function MateriaisScreen() {
       const fetchDados = async () => {
         const proj = await carregarProjetoAtivo();
         const precos = await obterPrecosLocais();
-        const cidadeSalva = await AsyncStorage.getItem(CHAVE_CIDADE);
 
         if (!isActive) return;
 
@@ -70,8 +62,6 @@ export default function MateriaisScreen() {
         setTabelaPrecos((prev) =>
           JSON.stringify(prev) !== JSON.stringify(precos) ? precos : prev,
         );
-        if (cidadeSalva)
-          setCidade((prev) => (prev !== cidadeSalva ? cidadeSalva : prev));
       };
 
       fetchDados();
@@ -90,44 +80,8 @@ export default function MateriaisScreen() {
     );
   };
 
-  const aplicarPlaca = () => {
-    Keyboard.dismiss();
-    const num = parseFloat(inputPotenciaPlaca.replace(",", ".")) || 550;
-    salvarAlteracoes({ potenciaPlaca: num });
-    setInputPotenciaPlaca(String(num));
-  };
-
-  const aplicarBateria = () => {
-    Keyboard.dismiss();
-    const num = parseFloat(inputCapacidadeBateria.replace(",", ".")) || 220;
-    salvarAlteracoes({ capacidadeBateria: num });
-    setInputCapacidadeBateria(String(num));
-  };
-
-  const aplicarMaoDeObra = () => {
-    Keyboard.dismiss();
-    const num = parseFloat(inputMaoDeObra.replace(",", ".")) || 0;
-    salvarAlteracoes({ maoDeObra: num });
-    setInputMaoDeObra(String(num));
-  };
-
-  const irParaOrcamento = async () => {
-    Keyboard.dismiss();
-    const numP = parseFloat(inputPotenciaPlaca.replace(",", ".")) || 550;
-    const numB = parseFloat(inputCapacidadeBateria.replace(",", ".")) || 220;
-    const numM = parseFloat(inputMaoDeObra.replace(",", ".")) || 0;
-
-    // Força gravação exata antes de mudar de tela!
-    await salvarAlteracoes({
-      potenciaPlaca: numP,
-      capacidadeBateria: numB,
-      maoDeObra: numM,
-    });
-    router.push("/orcamento");
-  };
-
-  const abrirConfiguracaoPrecos = () => {
-    setCidadeEmEdicao(cidade);
+  const abrirConfiguracaoPrecos = (sugestaoNome = "") => {
+    setNovoNomeItem(sugestaoNome);
     const precosOrdenados = [...tabelaPrecos].sort((a, b) =>
       a.nome.localeCompare(b.nome, "pt-BR"),
     );
@@ -135,17 +89,24 @@ export default function MateriaisScreen() {
     setModalVisivel(true);
   };
 
-  const abrirConfiguracaoPrecosComPreenchimentoAuto = (
-    nomeSugerido: string,
-    novoId: string,
-  ) => {
-    setCidadeEmEdicao(cidade);
-    const precosOrdenados = [...tabelaPrecos].sort((a, b) =>
-      a.nome.localeCompare(b.nome, "pt-BR"),
-    );
-    setPrecosEmEdicao(precosOrdenados);
-    setNovoNomeItem(nomeSugerido);
-    setModalVisivel(true);
+  const confirmarExclusaoItem = (id: string, nome: string) => {
+    const msg = `Deseja excluir "${nome}" permanentemente da sua tabela?`;
+
+    if (Platform.OS === "web") {
+      if (window.confirm(msg)) {
+        setPrecosEmEdicao((prev) => prev.filter((item) => item.id !== id));
+      }
+    } else {
+      Alert.alert("Atenção", msg, [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () =>
+            setPrecosEmEdicao((prev) => prev.filter((item) => item.id !== id)),
+        },
+      ]);
+    }
   };
 
   const atualizarPrecoEditado = (id: string, novoValor: string) => {
@@ -160,7 +121,12 @@ export default function MateriaisScreen() {
 
   const adicionarItemCustomizado = () => {
     if (!novoNomeItem.trim() || !novoPrecoItem.trim()) {
-      Alert.alert("Atenção", "Preencha o nome e o preço do novo equipamento.");
+      Platform.OS === "web"
+        ? window.alert("Preencha o nome e o preço do novo equipamento.")
+        : Alert.alert(
+            "Atenção",
+            "Preencha o nome e o preço do novo equipamento.",
+          );
       return;
     }
     const precoNum = parseFloat(novoPrecoItem.replace(",", ".")) || 0;
@@ -169,7 +135,7 @@ export default function MateriaisScreen() {
       id: novoId,
       nome: novoNomeItem.trim(),
       precoMedio: precoNum,
-      medida: novaMedidaItem,
+      medida: "unidade",
       categoria: "modulo",
     };
     setPrecosEmEdicao((prev) =>
@@ -184,23 +150,99 @@ export default function MateriaisScreen() {
   const salvarNovosPrecos = async () => {
     setTabelaPrecos(precosEmEdicao);
     await salvarPrecosLocais(precosEmEdicao);
-    if (cidadeEmEdicao) {
-      setCidade(cidadeEmEdicao);
-      await AsyncStorage.setItem(CHAVE_CIDADE, cidadeEmEdicao);
-    }
     setModalVisivel(false);
     Platform.OS === "web"
       ? window.alert("Sua tabela foi atualizada!")
       : Alert.alert("Sucesso", "Tabela atualizada!");
   };
 
-  if (!projeto) {
+  const handleBlurPlaca = () => {
+    setTimeout(() => {
+      setProjeto((p: any) => {
+        setInputPotenciaPlaca(String(p?.potenciaPlaca || 550));
+        return p;
+      });
+    }, 200);
+  };
+
+  const handleBlurBateria = () => {
+    setTimeout(() => {
+      setProjeto((p: any) => {
+        setInputCapacidadeBateria(String(p?.capacidadeBateria || 220));
+        return p;
+      });
+    }, 200);
+  };
+
+  const handleBlurMaoDeObra = () => {
+    setTimeout(() => {
+      setProjeto((p: any) => {
+        setInputMaoDeObra(String(p?.maoDeObra || 0));
+        return p;
+      });
+    }, 200);
+  };
+
+  const aplicarPlaca = async () => {
+    Keyboard.dismiss();
+    const num = parseFloat(inputPotenciaPlaca.replace(",", ".")) || 550;
+
+    await salvarAlteracoes({ potenciaPlaca: num });
+    setInputPotenciaPlaca(String(num));
+
+    const itemEncontrado = tabelaPrecos.find(
+      (p) =>
+        p.nome.toLowerCase().includes(`${num}w`) ||
+        p.nome.toLowerCase().includes(`${num} w`),
+    );
+
+    if (!itemEncontrado) {
+      const msg = `O Módulo de ${num}W não foi encontrado na tabela de preços.\nDeseja cadastrá-lo agora para prosseguir?`;
+
+      if (Platform.OS === "web") {
+        const querCadastrar = window.confirm(msg);
+        if (querCadastrar) {
+          abrirConfiguracaoPrecos(`Módulo Solar Fotovoltaico ${num}W`);
+        }
+      } else {
+        Alert.alert("Produto Não Cadastrado", msg, [
+          { text: "Cancelar", style: "cancel" },
+          {
+            text: "Cadastrar",
+            onPress: () =>
+              abrirConfiguracaoPrecos(`Módulo Solar Fotovoltaico ${num}W`),
+          },
+        ]);
+      }
+      return;
+    }
+  };
+
+  const aplicarBateria = async () => {
+    Keyboard.dismiss();
+    const num = parseFloat(inputCapacidadeBateria.replace(",", ".")) || 220;
+    await salvarAlteracoes({ capacidadeBateria: num });
+    setInputCapacidadeBateria(String(num));
+  };
+
+  const aplicarMaoDeObra = async () => {
+    Keyboard.dismiss();
+    const num = parseFloat(inputMaoDeObra.replace(",", ".")) || 0;
+    await salvarAlteracoes({ maoDeObra: num });
+    setInputMaoDeObra(String(num));
+  };
+
+  const irParaOrcamento = () => {
+    Keyboard.dismiss();
+    router.push("/orcamento");
+  };
+
+  if (!projeto)
     return (
       <View style={styles.container}>
         <Text style={styles.txtCarregando}>Carregando...</Text>
       </View>
     );
-  }
 
   const resultado = calcularSistema(projeto, tabelaPrecos);
   const {
@@ -208,13 +250,18 @@ export default function MateriaisScreen() {
     qtdPlacas,
     inversorKw,
     totalBaterias,
-    valorTotalProjeto,
     precos: { pPlaca, pInversor, pEstrutura, pStringBox, pConector, pBateria },
   } = resultado;
 
-  const valorPlaca = parseFloat(projeto?.potenciaPlaca) || 550;
-  const valorBateria = parseFloat(projeto?.capacidadeBateria) || 220;
+  // 💡 A MÁGICA AQUI: Lemos a mão de obra direto da memória fresca da tela
+  const maoDeObraLocal = parseFloat(projeto?.maoDeObra) || 0;
 
+  // E o Total do botão se torna: Tudo o que custa em Equipamento + A Mão de Obra nova!
+  const valorTotalEquipamentos =
+    resultado.valorTotalProjeto - (resultado.maoDeObra || 0);
+  const valorTotalCorreto = valorTotalEquipamentos + maoDeObraLocal;
+
+  const valorPlaca = parseFloat(projeto?.potenciaPlaca) || 550;
   const placaAlterada =
     inputPotenciaPlaca !== String(projeto?.potenciaPlaca || 550);
   const bateriaAlterada =
@@ -240,21 +287,22 @@ export default function MateriaisScreen() {
           </View>
           <TouchableOpacity
             style={styles.botaoConfig}
-            onPress={abrirConfiguracaoPrecos}
+            onPress={() => abrirConfiguracaoPrecos()}
           >
             <FontAwesome5 name="edit" size={12} color="#FFF" />
-            <Text style={styles.textoBotaoConfig}>Tabela de Preços</Text>
+            <Text style={styles.textoBotaoConfig}>Gerenciar Tabela</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.inputRow}>
-          <Text style={styles.label}>Potência do Módulo Solar (W):</Text>
+          <Text style={styles.label}>Potência do Módulo (W):</Text>
           <View style={styles.grupoInputRecalcular}>
             <TextInput
               style={styles.inputComBotao}
               keyboardType="numeric"
               value={inputPotenciaPlaca}
               onChangeText={setInputPotenciaPlaca}
+              onBlur={handleBlurPlaca}
               placeholder="Ex: 550"
             />
             <TouchableOpacity
@@ -278,13 +326,14 @@ export default function MateriaisScreen() {
 
         {!projeto?.temRede && (
           <View style={[styles.inputRow, { marginTop: 15 }]}>
-            <Text style={styles.label}>Cap. da Bateria 12V (Ah):</Text>
+            <Text style={styles.label}>Cap. da Bateria (Ah):</Text>
             <View style={styles.grupoInputRecalcular}>
               <TextInput
                 style={styles.inputComBotao}
                 keyboardType="numeric"
                 value={inputCapacidadeBateria}
                 onChangeText={setInputCapacidadeBateria}
+                onBlur={handleBlurBateria}
                 placeholder="Ex: 220"
               />
               <TouchableOpacity
@@ -315,6 +364,7 @@ export default function MateriaisScreen() {
               keyboardType="numeric"
               value={inputMaoDeObra}
               onChangeText={setInputMaoDeObra}
+              onBlur={handleBlurMaoDeObra}
               placeholder="Ex: 1500"
             />
             <TouchableOpacity
@@ -455,7 +505,7 @@ export default function MateriaisScreen() {
         </View>
 
         {!projeto.temRede && (
-          <View style={[styles.itemMaterial, { borderBottomWidth: 0 }]}>
+          <View style={styles.itemMaterial}>
             <MaterialCommunityIcons
               name="car-battery"
               size={28}
@@ -483,6 +533,47 @@ export default function MateriaisScreen() {
             </View>
           </View>
         )}
+
+        {/* --- CARD VISUAL DE MÃO DE OBRA --- */}
+        {maoDeObraLocal > 0 && (
+          <View
+            style={[
+              styles.itemMaterial,
+              {
+                borderBottomWidth: 0,
+                borderLeftWidth: 4,
+                borderLeftColor: "#F59E0B",
+                paddingLeft: 12,
+              },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="tools"
+              size={28}
+              color="#F59E0B"
+              style={styles.iconeMaterial}
+            />
+            <View style={styles.infoMaterial}>
+              <Text style={styles.nomeMaterial}>Serviço de Instalação</Text>
+              <Text style={styles.detalheMaterial}>
+                Mão de Obra do Projeto.
+              </Text>
+              <Text style={[styles.precoUnitario, { color: "#D97706" }]}>
+                R$ {maoDeObraLocal.toFixed(2).replace(".", ",")} / serv
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.badgeQtd,
+                { backgroundColor: "#FFFBEB", borderColor: "#F59E0B" },
+              ]}
+            >
+              <Text style={[styles.txtBadgeQtd, { color: "#D97706" }]}>
+                1 serv
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       <View style={{ marginTop: 25, marginBottom: 10, paddingHorizontal: 10 }}>
@@ -498,11 +589,12 @@ export default function MateriaisScreen() {
             style={{ marginRight: 10 }}
           />
           <Text style={styles.textoBotaoOrcamento}>
-            Ver Orçamento: R$ {valorTotalProjeto.toFixed(2).replace(".", ",")}
+            Ver Orçamento: R$ {valorTotalCorreto.toFixed(2).replace(".", ",")}
           </Text>
         </TouchableOpacity>
       </View>
 
+      {/* --- MODAL DA TABELA --- */}
       <Modal
         visible={modalVisivel}
         animationType="fade"
@@ -512,32 +604,59 @@ export default function MateriaisScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <View style={styles.grupoEdicaoCidade}>
-                <Text style={styles.labelCidade}>
-                  Nome do Projeto / Cliente:
-                </Text>
-                <TextInput
-                  style={styles.inputCidade}
-                  value={cidadeEmEdicao}
-                  onChangeText={setCidadeEmEdicao}
-                  placeholder="Ex: Projeto Residência Silva"
-                />
-              </View>
+              <Text
+                style={{ fontSize: 18, fontWeight: "bold", color: "#1E293B" }}
+              >
+                Tabela de Preços Ativa
+              </Text>
               <TouchableOpacity
                 onPress={() => setModalVisivel(false)}
                 style={styles.botaoFecharModal}
               >
-                <FontAwesome5 name="times" size={20} color="#6b7280" />
+                <FontAwesome5 name="times" size={20} color="#EF4444" />
               </TouchableOpacity>
             </View>
+
+            <View style={styles.cardNovoItem}>
+              <Text style={styles.tituloNovoItem}>
+                ➕ Cadastrar Novo Produto
+              </Text>
+              <TextInput
+                style={styles.inputNovoNome}
+                placeholder="Ex: Módulo 400W"
+                value={novoNomeItem}
+                onChangeText={setNovoNomeItem}
+              />
+              <View style={styles.rowNovoItem}>
+                <TextInput
+                  style={styles.inputNovoPreco}
+                  placeholder="Preço (R$)"
+                  keyboardType="numeric"
+                  value={novoPrecoItem}
+                  onChangeText={setNovoPrecoItem}
+                />
+                <TouchableOpacity
+                  style={styles.botaoAdicionarNovoItem}
+                  onPress={adicionarItemCustomizado}
+                >
+                  <Text style={styles.textoBotaoAdicionarNovo}>Adicionar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <ScrollView style={styles.modalScroll}>
+              <Text style={styles.subtituloEdicaoPrecos}>
+                Produtos Cadastrados:
+              </Text>
               {precosEmEdicao.map((item) => {
                 const precoFormatado = (item.precoMedio || 0)
                   .toString()
                   .replace(".", ",");
                 return (
                   <View key={item.id} style={styles.modalItemRow}>
-                    <Text style={styles.modalItemName}>{item.nome}</Text>
+                    <Text style={styles.modalItemName} numberOfLines={2}>
+                      {item.nome}
+                    </Text>
                     <View style={styles.modalInputGroup}>
                       <Text style={styles.modalCurrency}>R$</Text>
                       <TextInput
@@ -548,16 +667,29 @@ export default function MateriaisScreen() {
                           atualizarPrecoEditado(item.id, texto)
                         }
                       />
+                      <TouchableOpacity
+                        style={{ marginLeft: 8 }}
+                        onPress={() =>
+                          confirmarExclusaoItem(item.id, item.nome)
+                        }
+                      >
+                        <MaterialCommunityIcons
+                          name="close-circle"
+                          size={24}
+                          color="#EF4444"
+                        />
+                      </TouchableOpacity>
                     </View>
                   </View>
                 );
               })}
             </ScrollView>
+
             <TouchableOpacity
               style={styles.botaoSalvarModal}
               onPress={salvarNovosPrecos}
             >
-              <Text style={styles.textoBotaoSalvar}>Salvar Minha Tabela</Text>
+              <Text style={styles.textoBotaoSalvar}>Salvar Alterações</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -705,35 +837,20 @@ const styles = StyleSheet.create({
   modalContainer: {
     backgroundColor: "#fff",
     borderRadius: 20,
-    width: "90%",
+    width: "95%",
     maxWidth: 500,
     maxHeight: "85%",
     padding: 20,
+    flex: 1,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
     paddingBottom: 15,
     marginBottom: 10,
-  },
-  grupoEdicaoCidade: { flex: 1 },
-  labelCidade: {
-    fontSize: 12,
-    color: "#6b7280",
-    marginBottom: 4,
-    fontWeight: "600",
-  },
-  inputCidade: {
-    height: 40,
-    backgroundColor: "#f3f4f6",
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    fontSize: 14,
-    fontWeight: "bold",
   },
   botaoFecharModal: { padding: 4 },
   cardNovoItem: {
@@ -793,7 +910,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
   },
-  modalItemName: { flex: 1, fontSize: 13, color: "#374151" },
+  modalItemName: { flex: 1, fontSize: 13, color: "#374151", paddingRight: 8 },
   modalInputGroup: { flexDirection: "row", alignItems: "center" },
   modalCurrency: { fontSize: 13, color: "#6b7280", marginRight: 4 },
   modalInputPreco: {
@@ -806,7 +923,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontWeight: "bold",
   },
-  modalSufixo: { fontSize: 12, color: "#9ca3af", width: 30, marginLeft: 4 },
   botaoSalvarModal: {
     backgroundColor: "#F59E0B",
     paddingVertical: 14,

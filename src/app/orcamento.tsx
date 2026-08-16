@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CustomHeader from "../components/ui/CustomHeader";
 import { MaterialBase } from "../data/tabelaMateriais";
 import { calcularSistema } from "../utils/calculoSolar";
@@ -26,6 +27,8 @@ const CHAVE_CARRINHO = "@EletricaSolar_Carrinho_V1";
 const CHAVE_CIDADE = "@EletricaSolar_Cidade";
 
 export default function ScreenOrcamento() {
+  const insets = useSafeAreaInsets();
+
   const [projeto, setProjeto] = useState<any>(null);
   const [quantidades, setQuantidades] = useState<Record<string, number>>({});
   const [tabelaPrecos, setTabelaPrecos] = useState<MaterialBase[]>([]);
@@ -35,23 +38,40 @@ export default function ScreenOrcamento() {
   useFocusEffect(
     useCallback(() => {
       const inicializarBD = async () => {
-        const precos = await obterPrecosLocais();
-        setTabelaPrecos(precos);
-
+        const precosBase = await obterPrecosLocais();
         const cidadeSalva = await AsyncStorage.getItem(CHAVE_CIDADE);
         if (cidadeSalva) setCidade(cidadeSalva);
 
         let quantidadesAtuais: Record<string, number> = {};
         const proj = await carregarProjetoAtivo();
+        let precosCompletos = [...precosBase];
 
         if (proj) {
+          const num = parseFloat(proj.potenciaPlaca) || 550;
+          const itemEncontrado = precosCompletos.find(
+            (p) =>
+              p.nome.toLowerCase().includes(`${num}w`) ||
+              p.nome.toLowerCase().includes(`${num} w`),
+          );
+
+          if (!itemEncontrado) {
+            precosCompletos.push({
+              id: `mod_temp_${num}`,
+              nome: `Módulo Solar Fotovoltaico ${num}W (Sem Preço)`,
+              precoMedio: 0,
+              medida: "und",
+              categoria: "modulo",
+            });
+          }
+
+          setTabelaPrecos(precosCompletos);
           setProjeto(proj);
-          const resultado = calcularSistema(proj, precos);
+
+          const resultado = calcularSistema(proj, precosCompletos);
           const { qtdPlacas, idPlacaDinamico, idInversor, totalBaterias } =
             resultado;
 
-          // Limpa todos os fantasmas do carrinho
-          precos.forEach((item) => {
+          precosCompletos.forEach((item) => {
             if (
               item.id.startsWith("mod_") ||
               item.id.startsWith("inv_") ||
@@ -115,7 +135,6 @@ export default function ScreenOrcamento() {
 
   const gerarPdfOrcamento = async () => {
     Keyboard.dismiss();
-
     try {
       const itensHtml = materiaisVisiveis
         .map((item) => {
@@ -185,12 +204,14 @@ export default function ScreenOrcamento() {
             <div class="total-box">
               VALOR TOTAL ESTIMADO: R$ ${valorTotal.toFixed(2).replace(".", ",")}
             </div>
+            <div style="margin-top: 30px; font-size: 11px; color: #64748B; border-top: 1px solid #E2E8F0; padding-top: 10px;">
+              <strong>Notas Legais e Normas Aplicáveis:</strong> Orçamento estimado para fins comerciais. O dimensionamento técnico On-Grid segue as diretrizes do Marco Legal da Microgeração (Lei 14.300/2022) e está sujeito a variações de tarifas (Fio B) e taxas mínimas da concessionária local. A execução da instalação deverá obedecer rigorosamente às normas ABNT NBR 16690 e NBR 5410. A aprovação e troca do medidor dependem exclusivamente da concessionária de energia.
+            </div>
           </body>
         </html>
       `;
 
       if (Platform.OS === "web") {
-        // 💡 BOLHA ISOLADA: A impressora roda fora do App. Adeus travamentos!
         const htmlComScript = htmlContent.replace(
           "</body>",
           "<script>window.onload = function() { setTimeout(function() { window.print(); }, 300); }</script></body>",
@@ -202,7 +223,7 @@ export default function ScreenOrcamento() {
         const a = document.createElement("a");
         a.href = url;
         a.target = "_blank";
-        a.rel = "noopener noreferrer"; // Quebra o vínculo com a janela principal
+        a.rel = "noopener noreferrer";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -222,8 +243,15 @@ export default function ScreenOrcamento() {
       <CustomHeader
         title="Orçamento Financeiro"
         onBackPress={() => {
-          if (mostrarTodos) setMostrarTodos(false);
-          else router.back();
+          if (mostrarTodos) {
+            setMostrarTodos(false);
+          } else {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/");
+            }
+          }
         }}
       />
       <ScrollView
@@ -314,7 +342,12 @@ export default function ScreenOrcamento() {
         </TouchableOpacity>
       </ScrollView>
 
-      <View style={styles.footerTotal}>
+      <View
+        style={[
+          styles.footerTotal,
+          { paddingBottom: Math.max(insets.bottom + 16, 16) },
+        ]}
+      >
         <View>
           <Text style={styles.textoTotalLabel}>Total do Projeto:</Text>
           <Text style={{ color: "#E0F2FE", fontSize: 12 }}>
@@ -366,7 +399,7 @@ const styles = StyleSheet.create({
     borderColor: "#d1d5db",
     borderRadius: 6,
     width: 50,
-    height: 36,
+    paddingVertical: Platform.OS === "ios" ? 8 : 4,
     textAlign: "center",
     fontSize: 16,
     fontWeight: "bold",
@@ -402,7 +435,8 @@ const styles = StyleSheet.create({
   textoBotaoPdf: { color: "#ffffff", fontSize: 15, fontWeight: "bold" },
   footerTotal: {
     backgroundColor: "#208AEF",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",

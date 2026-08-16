@@ -36,7 +36,7 @@ export default function CargaScreen() {
 
   const [nome, setNome] = useState("");
   const [potencia, setPotencia] = useState("");
-  const [quantidade, setQuantidade] = useState("1"); // NOVO: Campo de quantidade (começa com 1)
+  const [quantidade, setQuantidade] = useState("1");
   const [horas, setHoras] = useState("");
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
@@ -45,7 +45,6 @@ export default function CargaScreen() {
       const fetchDados = async () => {
         const projeto = await carregarProjetoAtivo();
         setInventario(projeto.inventario || []);
-
         const listaBD = await carregarListaEquipamentos();
         setListaSugestoes(listaBD);
       };
@@ -60,13 +59,12 @@ export default function CargaScreen() {
   const selecionarSugestao = (item: EquipamentoPadrao) => {
     setNome(item.label);
     setPotencia(item.potenciaMediaW.toString());
-    setQuantidade("1"); // Reseta a quantidade para 1 ao escolher algo novo
+    setQuantidade("1");
     setMostrarSugestoes(false);
   };
 
   const excluirSugestaoBd = async (id: string, nomeSugestao: string) => {
     const msg = `Deseja excluir "${nomeSugestao}" da sua lista de sugestões permanentemente?`;
-
     if (Platform.OS === "web") {
       if (window.confirm(msg)) {
         const novaLista = await excluirEquipamentoDoBanco(id);
@@ -97,13 +95,13 @@ export default function CargaScreen() {
 
     const potenciaNumerica = parseFloat(potencia.replace(",", "."));
     const horasNumerica = parseFloat(horas.replace(",", "."));
-    const quantidadeNumerica = parseInt(quantidade, 10); // Lendo a quantidade
+    const quantidadeNumerica = parseInt(quantidade, 10);
 
     const novoEquipamento: EquipamentoCarga = {
       id: Math.random().toString(36).substring(7),
       nome: nome.trim(),
       potenciaW: potenciaNumerica,
-      quantidade: quantidadeNumerica, // Agora usa o valor digitado!
+      quantidade: quantidadeNumerica,
       horasUsoDia: horasNumerica,
     };
 
@@ -113,13 +111,11 @@ export default function CargaScreen() {
       nome,
       potenciaNumerica,
     );
-    if (listaAtualizada) {
-      setListaSugestoes(listaAtualizada);
-    }
+    if (listaAtualizada) setListaSugestoes(listaAtualizada);
 
     setNome("");
     setPotencia("");
-    setQuantidade("1"); // Volta pro padrão
+    setQuantidade("1");
     setHoras("");
   };
 
@@ -151,10 +147,10 @@ export default function CargaScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 120 }}
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.cardForm}>
         <Text style={styles.tituloSecao}>Adicionar Carga</Text>
-
         <Text style={styles.label}>Nome do Equipamento:</Text>
         <View style={styles.hybridContainer}>
           <TextInput
@@ -189,7 +185,6 @@ export default function CargaScreen() {
                       {item.potenciaMediaW}W
                     </Text>
                   </TouchableOpacity>
-
                   <TouchableOpacity
                     style={styles.btnDeletarSugestao}
                     onPress={() => excluirSugestaoBd(item.id, item.label)}
@@ -206,7 +201,6 @@ export default function CargaScreen() {
           </View>
         )}
 
-        {/* NOVA LINHA COM 3 CAMPOS DIVIDIDOS */}
         <View style={styles.row}>
           <View style={styles.inputGroup33}>
             <Text style={styles.label}>Qtd:</Text>
@@ -219,7 +213,7 @@ export default function CargaScreen() {
             />
           </View>
           <View style={styles.inputGroup33}>
-            <Text style={styles.label}>Pot. (W):</Text>
+            <Text style={styles.label}>Potência (W):</Text>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
@@ -351,9 +345,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: -10,
     elevation: 3,
-    // @ts-ignore
-    boxShadow:
-      Platform.OS === "web" ? "0px 4px 6px rgba(0,0,0,0.1)" : undefined,
   },
   sugestaoRow: {
     flexDirection: "row",
@@ -374,18 +365,17 @@ const styles = StyleSheet.create({
   },
   textoItemSugestao: { fontSize: 14, color: "#334155", fontWeight: "500" },
   textoPotenciaSugestao: { fontSize: 14, color: "#0056B3", fontWeight: "bold" },
-
   input: {
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    padding: 12,
+    paddingVertical: Platform.OS === "ios" ? 12 : 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
     marginBottom: 16,
     backgroundColor: "#FFF",
   },
   row: { flexDirection: "row", justifyContent: "space-between" },
-  inputGroup33: { width: "31%" }, // NOVO: Dividido em 3 colunas iguais
-
+  inputGroup33: { width: "31%" },
   btnAdicionar: {
     backgroundColor: "#0056B3",
     padding: 14,
@@ -427,7 +417,7 @@ const styles = StyleSheet.create({
     color: "#0284C7",
     marginTop: 4,
     fontWeight: "bold",
-  }, // NOVO: Mostra o subtotal de consumo do item
+  },
   btnRemover: { justifyContent: "center", paddingHorizontal: 16 },
   txtVazio: {
     textAlign: "center",
