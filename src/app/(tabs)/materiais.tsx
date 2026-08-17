@@ -183,39 +183,56 @@ export default function MateriaisScreen() {
     }, 200);
   };
 
+  // --- NOVA LÓGICA DE APLICAÇÃO COM BACKUP SEGURO ---
   const aplicarPlaca = async () => {
     Keyboard.dismiss();
+
+    // 💡 1. Salva o backup ANTES de mexer no banco
+    const valorAntigo = projeto?.potenciaPlaca || 550;
     const num = parseFloat(inputPotenciaPlaca.replace(",", ".")) || 550;
 
-    await salvarAlteracoes({ potenciaPlaca: num });
-    setInputPotenciaPlaca(String(num));
-
+    // 💡 2. Verifica a tabela de preços primeiro
     const itemEncontrado = tabelaPrecos.find(
       (p) =>
         p.nome.toLowerCase().includes(`${num}w`) ||
         p.nome.toLowerCase().includes(`${num} w`),
     );
 
+    // 💡 3. Se não encontrar, pergunta e trava o salvamento
     if (!itemEncontrado) {
       const msg = `O Módulo de ${num}W não foi encontrado na tabela de preços.\nDeseja cadastrá-lo agora para prosseguir?`;
+
+      const acaoCancelar = () => {
+        // Se cancelar, puxa o backup!
+        setInputPotenciaPlaca(String(valorAntigo));
+      };
+
+      const acaoCadastrar = async () => {
+        // Se confirmar, a gente salva e abre a tabela
+        await salvarAlteracoes({ potenciaPlaca: num });
+        setInputPotenciaPlaca(String(num));
+        abrirConfiguracaoPrecos(`Módulo Solar Fotovoltaico ${num}W`);
+      };
 
       if (Platform.OS === "web") {
         const querCadastrar = window.confirm(msg);
         if (querCadastrar) {
-          abrirConfiguracaoPrecos(`Módulo Solar Fotovoltaico ${num}W`);
+          acaoCadastrar();
+        } else {
+          acaoCancelar();
         }
       } else {
         Alert.alert("Produto Não Cadastrado", msg, [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Cadastrar",
-            onPress: () =>
-              abrirConfiguracaoPrecos(`Módulo Solar Fotovoltaico ${num}W`),
-          },
+          { text: "Cancelar", style: "cancel", onPress: acaoCancelar },
+          { text: "Cadastrar", onPress: acaoCadastrar },
         ]);
       }
       return;
     }
+
+    // 💡 4. Só salva no banco se tudo deu certo ou se for cadastrar
+    await salvarAlteracoes({ potenciaPlaca: num });
+    setInputPotenciaPlaca(String(num));
   };
 
   const aplicarBateria = async () => {
@@ -253,10 +270,7 @@ export default function MateriaisScreen() {
     precos: { pPlaca, pInversor, pEstrutura, pStringBox, pConector, pBateria },
   } = resultado;
 
-  // 💡 A MÁGICA AQUI: Lemos a mão de obra direto da memória fresca da tela
   const maoDeObraLocal = parseFloat(projeto?.maoDeObra) || 0;
-
-  // E o Total do botão se torna: Tudo o que custa em Equipamento + A Mão de Obra nova!
   const valorTotalEquipamentos =
     resultado.valorTotalProjeto - (resultado.maoDeObra || 0);
   const valorTotalCorreto = valorTotalEquipamentos + maoDeObraLocal;
