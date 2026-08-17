@@ -1,4 +1,5 @@
 // src/app/_layout.tsx
+import Constants from "expo-constants"; // 💡 NOVO: Importação para ler o app.json
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -25,7 +26,7 @@ export default function RootLayout() {
   const [nomeProjetoModal, setNomeProjetoModal] = useState("");
   const [isNovo, setIsNovo] = useState(true);
 
-  // NOVO: Controle de estado para a tela de Encerramento na Web
+  // Controle de estado para a tela de Encerramento na Web
   const [isEncerrado, setIsEncerrado] = useState(false);
 
   const router = useRouter();
@@ -64,7 +65,6 @@ export default function RootLayout() {
     }
   };
 
-  // A FUNÇÃO CORRIGIDA DO JEITO "REACT"
   const encerrarApp = async () => {
     await limparProjeto();
     setModalVisivel(false);
@@ -83,14 +83,19 @@ export default function RootLayout() {
     }
   };
 
-  const HeaderDireita = () => (
-    <View style={styles.headerRightContainer}>
-      <Text style={styles.versaoTexto}>v1.0.0</Text>
-      <TouchableOpacity onPress={abrirModal} style={styles.btnFechar}>
-        <Text style={styles.iconeFechar}>X</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const HeaderDireita = () => {
+    // 💡 NOVO: Busca a versão direto do app.json (se não achar, usa um fallback)
+    const versaoApp = Constants.expoConfig?.version || "1.0.0";
+
+    return (
+      <View style={styles.headerRightContainer}>
+        <Text style={styles.versaoTexto}>v{versaoApp}</Text>
+        <TouchableOpacity onPress={abrirModal} style={styles.btnFechar}>
+          <Text style={styles.iconeFechar}>X</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   // === TELA DE ENCERRAMENTO (ABATE VISUAL SEGURO) ===
   if (isEncerrado) {

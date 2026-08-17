@@ -2,10 +2,11 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -30,6 +31,31 @@ export default function InicioScreen() {
   const [mostrarPickerEstado, setMostrarPickerEstado] = useState(false);
   const [mostrarPickerHistorico, setMostrarPickerHistorico] = useState(false);
 
+  // Controle do Modal de Termos
+  const [mostrarTermos, setMostrarTermos] = useState(false);
+
+  // Verifica se o usuário já aceitou os termos ao carregar o app
+  useEffect(() => {
+    const verificarTermos = async () => {
+      try {
+        const aceitou = await AsyncStorage.getItem(
+          "@EletricaSolar_TermosAceitos",
+        );
+        if (aceitou !== "true") {
+          setMostrarTermos(true);
+        }
+      } catch (e) {
+        console.error("Erro ao verificar termos:", e);
+      }
+    };
+    verificarTermos();
+  }, []);
+
+  const aceitarTermos = async () => {
+    await AsyncStorage.setItem("@EletricaSolar_TermosAceitos", "true");
+    setMostrarTermos(false);
+  };
+
   useFocusEffect(
     useCallback(() => {
       const fetchDados = async () => {
@@ -51,7 +77,6 @@ export default function InicioScreen() {
     );
   };
 
-  // === LÓGICA ATUALIZADA COM O MODO MISTO ===
   const alternarTipoCalculo = (
     novoTipo: "equipamentos" | "direto" | "misto",
   ) => {
@@ -62,13 +87,12 @@ export default function InicioScreen() {
     const temConsumo =
       projeto?.consumoDiretokWh && projeto.consumoDiretokWh > 0;
 
-    // Vai perder a lista de equipamentos?
     const perdeEquipamentos =
       (projeto?.tipoCalculo === "equipamentos" ||
         projeto?.tipoCalculo === "misto") &&
       novoTipo === "direto" &&
       temEquipamentos;
-    // Vai perder o consumo digitado?
+
     const perdeConsumo =
       (projeto?.tipoCalculo === "direto" || projeto?.tipoCalculo === "misto") &&
       novoTipo === "equipamentos" &&
@@ -79,7 +103,7 @@ export default function InicioScreen() {
         salvarAlteracoes({ tipoCalculo: novoTipo, inventario: [] });
       else if (novoTipo === "equipamentos")
         salvarAlteracoes({ tipoCalculo: novoTipo, consumoDiretokWh: 0 });
-      else salvarAlteracoes({ tipoCalculo: novoTipo }); // Para 'misto' não apaga nada!
+      else salvarAlteracoes({ tipoCalculo: novoTipo });
     };
 
     if (perdeEquipamentos) {
@@ -117,7 +141,6 @@ export default function InicioScreen() {
     }
   };
 
-  // Gerenciamento de Histórico
   const selecionarProjetoSalvo = async (proj: any) => {
     const msg = `Deseja carregar o projeto "${proj.nome}"?\n\nQualquer alteração não salva no rascunho atual será perdida.`;
     const executar = async () => {
@@ -172,6 +195,76 @@ export default function InicioScreen() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 40 }}
     >
+      {/* ========================================== */}
+      {/* MODAL DE TERMOS DE RESPONSABILIDADE        */}
+      {/* ========================================== */}
+      <Modal
+        visible={mostrarTermos}
+        animationType="slide"
+        transparent={true}
+        // Bloqueia o botão de voltar no Android para não burlarem a tela
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalTermosContainer}>
+            <View style={{ alignItems: "center", marginBottom: 15 }}>
+              <MaterialCommunityIcons
+                name="shield-alert-outline"
+                size={48}
+                color="#0284C7"
+              />
+              <Text style={styles.modalTituloTermos}>
+                Termo de Isenção de Responsabilidade
+              </Text>
+            </View>
+
+            <ScrollView style={{ maxHeight: "70%" }}>
+              <Text style={styles.textoTermoDestak}>
+                O "Elétrica Solar" é uma ferramenta de estimativa e
+                pré-dimensionamento voltada para auxiliar profissionais do setor
+                fotovoltaico.
+              </Text>
+
+              <Text style={styles.textoTermo}>
+                <Text style={{ fontWeight: "bold" }}>
+                  1. Não substitui projeto:{" "}
+                </Text>
+                Os resultados gerados não substituem o Projeto Executivo de
+                Engenharia e o recolhimento de ART/TRT.
+              </Text>
+
+              <Text style={styles.textoTermo}>
+                <Text style={{ fontWeight: "bold" }}>2. Risco Elétrico: </Text>
+                Instalações solares envolvem risco de morte e incêndio. A
+                execução deve ser feita estritamente por profissionais
+                qualificados, seguindo as normas ABNT (NBR 5410 e NBR 16690).
+              </Text>
+
+              <Text style={styles.textoTermo}>
+                <Text style={{ fontWeight: "bold" }}>3. Isenção: </Text>
+                Os criadores deste aplicativo não se responsabilizam por
+                acidentes, danos materiais, falhas de instalação, reprovação
+                junto à concessionária ou prejuízos financeiros decorrentes do
+                uso inadequado das informações aqui geradas.
+              </Text>
+
+              <Text style={styles.textoTermoFinal}>
+                Ao prosseguir, você declara estar ciente destes riscos e assume
+                total responsabilidade pelo uso dos dados.
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.btnAceitarTermos}
+              activeOpacity={0.8}
+              onPress={aceitarTermos}
+            >
+              <Text style={styles.txtBtnBranco}>Li e Aceito</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* IDENTIFICAÇÃO DO CLIENTE E CARREGAMENTO DE HISTÓRICO */}
       <View style={styles.card}>
         <View style={styles.cabecalhoCard}>
@@ -276,9 +369,7 @@ export default function InicioScreen() {
           </View>
         )}
 
-        {/* ==================================================== */}
-        {/* MODO DE CÁLCULO (AGORA COM 3 BOTÕES LADO A LADO) */}
-        {/* ==================================================== */}
+        {/* MODO DE CÁLCULO */}
         <Text style={styles.label}>Método de Dimensionamento:</Text>
         <View style={styles.linhaBotoes}>
           <TouchableOpacity
@@ -356,7 +447,7 @@ export default function InicioScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* CAMPO DE DIGITAR O CONSUMO (Aparece no Direto E no Misto) */}
+        {/* CAMPO DE DIGITAR O CONSUMO */}
         {(projeto?.tipoCalculo === "direto" ||
           projeto?.tipoCalculo === "misto") && (
           <View style={{ marginBottom: 10, marginTop: 8 }}>
@@ -503,6 +594,65 @@ export default function InicioScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC", padding: 16 },
+
+  // --- Estilos do Modal de Termos ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalTermosContainer: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 24,
+    width: "100%",
+    maxWidth: 500,
+    elevation: 5,
+    // @ts-ignore
+    boxShadow:
+      Platform.OS === "web" ? "0px 10px 25px rgba(0,0,0,0.2)" : undefined,
+  },
+  modalTituloTermos: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#0284C7",
+    marginTop: 10,
+    textAlign: "center",
+  },
+  textoTermoDestak: {
+    fontSize: 14,
+    color: "#334155",
+    fontStyle: "italic",
+    marginBottom: 15,
+    textAlign: "justify",
+  },
+  textoTermo: {
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 20,
+    marginBottom: 12,
+    textAlign: "justify",
+  },
+  textoTermoFinal: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#EF4444",
+    marginTop: 10,
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  btnAceitarTermos: {
+    backgroundColor: "#10B981",
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+    elevation: 2,
+  },
+  // ----------------------------------
+
   card: {
     backgroundColor: "#FFF",
     padding: 16,
