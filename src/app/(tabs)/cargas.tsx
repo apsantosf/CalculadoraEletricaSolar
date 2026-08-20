@@ -203,7 +203,7 @@ export default function CargaScreen() {
 
         <View style={styles.row}>
           <View style={styles.inputGroup33}>
-            <Text style={styles.label}>Qtd:</Text>
+            <Text style={styles.label}>Quantidade:</Text>
             <TextInput
               style={styles.input}
               keyboardType="numeric"
