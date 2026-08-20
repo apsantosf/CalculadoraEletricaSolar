@@ -575,7 +575,7 @@ export default function InicioScreen() {
           style={styles.btnManual}
           onPress={() =>
             Linking.openURL(
-              "https://drive.google.com/file/d/1A5a4cGvsRyKCQfSCxaQuiNvx1_0xEz-V/view?usp=sharing",
+              "https://drive.google.com/file/d/1A5a4cGvsRyKCQfSCxaQuiNvx1_0xEz-V/view?usp=drive_link",
             )
           }
         >
