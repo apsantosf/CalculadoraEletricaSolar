@@ -1,7 +1,7 @@
 // src/app/_layout.tsx
-import Constants from "expo-constants"; // 💡 NOVO: Importação para ler o app.json
+import Constants from "expo-constants";
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react"; // 💡 ATUALIZADO: useEffect adicionado
 import {
   Alert,
   BackHandler,
@@ -14,6 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+// 💡 NOVO: Importação da biblioteca de atualização do Google Play
+import SpInAppUpdates, { IAUUpdateKind } from "sp-react-native-in-app-updates";
+
 import {
   atualizarNomeProjeto,
   carregarProjetoAtivo,
@@ -30,6 +33,28 @@ export default function RootLayout() {
   const [isEncerrado, setIsEncerrado] = useState(false);
 
   const router = useRouter();
+
+  // === NOVO: TRAVA DE ATUALIZAÇÃO OBRIGATÓRIA (PLAY STORE) ===
+  useEffect(() => {
+    // Só executa essa checagem se estiver rodando no celular (ignora na Web)
+    if (Platform.OS === "android") {
+      const inAppUpdates = new SpInAppUpdates(false);
+
+      // Pergunta para a Play Store: "A versão da loja é maior que a minha?"
+      inAppUpdates
+        .checkNeedsUpdate()
+        .then((result) => {
+          if (result.shouldUpdate) {
+            // Se tiver atualização, joga a tela de bloqueio obrigatória
+            inAppUpdates.startUpdate({
+              updateType: IAUUpdateKind.IMMEDIATE,
+            });
+          }
+        })
+        .catch((erro) => console.log("Erro ao checar atualização: ", erro));
+    }
+  }, []);
+  // ============================================================
 
   const abrirModal = async () => {
     const projAtivo = await carregarProjetoAtivo();
@@ -84,7 +109,6 @@ export default function RootLayout() {
   };
 
   const HeaderDireita = () => {
-    // 💡 NOVO: Busca a versão direto do app.json (se não achar, usa um fallback)
     const versaoApp = Constants.expoConfig?.version || "1.0.0";
 
     return (
