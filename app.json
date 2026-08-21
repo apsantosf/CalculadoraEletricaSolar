@@ -2,7 +2,7 @@
   "expo": {
     "name": "Elétrica Solar",
     "slug": "CalculadoraEletricaSolar",
-    "version": "1.3.5",
+    "version": "1.3.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "calculadoraeletricasolar",
@@ -18,7 +18,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.apsantosf.CalculadoraEletricaSolar",
-      "versionCode": 5
+      "versionCode": 6
     },
     "web": {
       "output": "static",
