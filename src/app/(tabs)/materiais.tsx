@@ -32,6 +32,8 @@ export default function MateriaisScreen() {
   const [inputPotenciaPlaca, setInputPotenciaPlaca] = useState("");
   const [inputCapacidadeBateria, setInputCapacidadeBateria] = useState("");
   const [inputMaoDeObra, setInputMaoDeObra] = useState("");
+  // 💡 NOVO: Estado para controlar a margem de segurança
+  const [inputMargemSeguranca, setInputMargemSeguranca] = useState("");
 
   const [modalVisivel, setModalVisivel] = useState(false);
   const [precosEmEdicao, setPrecosEmEdicao] = useState<MaterialBase[]>([]);
@@ -54,6 +56,8 @@ export default function MateriaisScreen() {
             setInputPotenciaPlaca(String(proj?.potenciaPlaca || 550));
             setInputCapacidadeBateria(String(proj?.capacidadeBateria || 220));
             setInputMaoDeObra(String(proj?.maoDeObra || 0));
+            // 💡 NOVO: Carrega a margem salva ou assume 20% como padrão
+            setInputMargemSeguranca(String(proj?.margemSeguranca ?? 20));
             return proj;
           }
           return prevProjeto;
@@ -183,32 +187,35 @@ export default function MateriaisScreen() {
     }, 200);
   };
 
-  // --- NOVA LÓGICA DE APLICAÇÃO COM BACKUP SEGURO ---
+  // 💡 NOVO: Restaura o valor da margem se o usuário clicar fora sem salvar
+  const handleBlurMargem = () => {
+    setTimeout(() => {
+      setProjeto((p: any) => {
+        setInputMargemSeguranca(String(p?.margemSeguranca ?? 20));
+        return p;
+      });
+    }, 200);
+  };
+
   const aplicarPlaca = async () => {
     Keyboard.dismiss();
-
-    // 💡 1. Salva o backup ANTES de mexer no banco
     const valorAntigo = projeto?.potenciaPlaca || 550;
     const num = parseFloat(inputPotenciaPlaca.replace(",", ".")) || 550;
 
-    // 💡 2. Verifica a tabela de preços primeiro
     const itemEncontrado = tabelaPrecos.find(
       (p) =>
         p.nome.toLowerCase().includes(`${num}w`) ||
         p.nome.toLowerCase().includes(`${num} w`),
     );
 
-    // 💡 3. Se não encontrar, pergunta e trava o salvamento
     if (!itemEncontrado) {
       const msg = `O Módulo de ${num}W não foi encontrado na tabela de preços.\nDeseja cadastrá-lo agora para prosseguir?`;
 
       const acaoCancelar = () => {
-        // Se cancelar, puxa o backup!
         setInputPotenciaPlaca(String(valorAntigo));
       };
 
       const acaoCadastrar = async () => {
-        // Se confirmar, a gente salva e abre a tabela
         await salvarAlteracoes({ potenciaPlaca: num });
         setInputPotenciaPlaca(String(num));
         abrirConfiguracaoPrecos(`Módulo Solar Fotovoltaico ${num}W`);
@@ -230,7 +237,6 @@ export default function MateriaisScreen() {
       return;
     }
 
-    // 💡 4. Só salva no banco se tudo deu certo ou se for cadastrar
     await salvarAlteracoes({ potenciaPlaca: num });
     setInputPotenciaPlaca(String(num));
   };
@@ -247,6 +253,16 @@ export default function MateriaisScreen() {
     const num = parseFloat(inputMaoDeObra.replace(",", ".")) || 0;
     await salvarAlteracoes({ maoDeObra: num });
     setInputMaoDeObra(String(num));
+  };
+
+  // 💡 NOVO: Função para salvar a margem de segurança
+  const aplicarMargem = async () => {
+    Keyboard.dismiss();
+    const limpo = inputMargemSeguranca.replace(",", ".");
+    const num =
+      limpo !== "" && !isNaN(parseFloat(limpo)) ? parseFloat(limpo) : 20;
+    await salvarAlteracoes({ margemSeguranca: num });
+    setInputMargemSeguranca(String(num));
   };
 
   const irParaOrcamento = () => {
@@ -281,6 +297,9 @@ export default function MateriaisScreen() {
   const bateriaAlterada =
     inputCapacidadeBateria !== String(projeto?.capacidadeBateria || 220);
   const maoDeObraAlterada = inputMaoDeObra !== String(projeto?.maoDeObra || 0);
+  // 💡 NOVO: Verifica se o campo da margem foi alterado para habilitar o botão
+  const margemAlterada =
+    inputMargemSeguranca !== String(projeto?.margemSeguranca ?? 20);
 
   return (
     <ScrollView
@@ -336,6 +355,49 @@ export default function MateriaisScreen() {
               />
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* 💡 NOVO: Bloco do Coeficiente de Segurança */}
+        <View style={{ marginTop: 15 }}>
+          <View style={styles.inputRow}>
+            <Text style={styles.label}>Margem de Perdas (%):</Text>
+            <View style={styles.grupoInputRecalcular}>
+              <TextInput
+                style={styles.inputComBotao}
+                keyboardType="numeric"
+                value={inputMargemSeguranca}
+                onChangeText={setInputMargemSeguranca}
+                onBlur={handleBlurMargem}
+                placeholder="Ex: 20"
+              />
+              <TouchableOpacity
+                style={[
+                  styles.botaoRecalcular,
+                  margemAlterada
+                    ? styles.botaoRecalcularAtivo
+                    : styles.botaoRecalcularInativo,
+                ]}
+                disabled={!margemAlterada}
+                onPress={aplicarMargem}
+              >
+                <MaterialCommunityIcons
+                  name="check"
+                  size={18}
+                  color={margemAlterada ? "#FFF" : "#94A3B8"}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+          {/* Mágica Visual de Segurança */}
+          {inputMargemSeguranca !== "20" ? (
+            <Text style={styles.alertaMargemPersonalizada}>
+              ⚠️ Escolha do usuário (Coeficiente personalizado)
+            </Text>
+          ) : (
+            <Text style={styles.textoMargemPadrao}>
+              Padrão recomendado pelo sistema
+            </Text>
+          )}
         </View>
 
         {!projeto?.temRede && (
@@ -791,6 +853,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#E2E8F0",
     borderColor: "#7DD3FC",
   },
+
+  // 💡 NOVOS ESTILOS PARA OS AVISOS DA MARGEM DE SEGURANÇA
+  alertaMargemPersonalizada: {
+    fontSize: 11,
+    color: "#DC2626", // Vermelho forte
+    fontWeight: "bold",
+    marginTop: 4,
+    textAlign: "right",
+  },
+  textoMargemPadrao: {
+    fontSize: 11,
+    color: "#059669", // Verde padrão
+    marginTop: 4,
+    textAlign: "right",
+  },
+
   cardLista: {
     backgroundColor: "#FFF",
     padding: 16,

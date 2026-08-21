@@ -25,7 +25,15 @@ export function calcularSistema(projeto: any, tabelaPrecos: MaterialBase[]) {
 
   const regiao = REGIOES_SOLARES.find((r) => r.uf === projeto?.estado);
   const hsp = regiao ? regiao.hspMedio : 4.5;
-  const eficienciaSistema = 0.75;
+
+  // 💡 A MÁGICA DA RESPONSABILIDADE ACONTECE AQUI!
+  // Pega a margem digitada (ou assume 20% como padrão seguro)
+  let margemPerdas = parseFloat(projeto?.margemSeguranca);
+  if (isNaN(margemPerdas)) margemPerdas = 20;
+
+  // Transforma a perda em eficiência. (Ex: 20% de perda = 0.80 de eficiência)
+  const eficienciaSistema = (100 - margemPerdas) / 100;
+
   const potenciaPicoWp =
     hsp > 0 ? consumoDiarioWh / (hsp * eficienciaSistema) : 0;
 
