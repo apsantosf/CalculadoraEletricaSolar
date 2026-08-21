@@ -1,7 +1,7 @@
 // src/app/_layout.tsx
 import Constants from "expo-constants";
 import { Stack, useRouter } from "expo-router";
-import { useEffect, useState } from "react"; // 💡 ATUALIZADO: useEffect adicionado
+import { useEffect, useState } from "react";
 import {
   Alert,
   BackHandler,
@@ -14,8 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// 💡 NOVO: Importação da biblioteca de atualização do Google Play
-import SpInAppUpdates, { IAUUpdateKind } from "sp-react-native-in-app-updates";
+
+// 💡 NOVO: Importação inteligente (O Expo escolhe automaticamente entre Web e Android)
+import { checarAtualizacao } from "../utils/UpdateHelper";
 
 import {
   atualizarNomeProjeto,
@@ -34,27 +35,11 @@ export default function RootLayout() {
 
   const router = useRouter();
 
-  // === NOVO: TRAVA DE ATUALIZAÇÃO OBRIGATÓRIA (PLAY STORE) ===
+  // === TRAVA DE ATUALIZAÇÃO OBRIGATÓRIA ===
   useEffect(() => {
-    // Só executa essa checagem se estiver rodando no celular (ignora na Web)
-    if (Platform.OS === "android") {
-      const inAppUpdates = new SpInAppUpdates(false);
-
-      // Pergunta para a Play Store: "A versão da loja é maior que a minha?"
-      inAppUpdates
-        .checkNeedsUpdate()
-        .then((result) => {
-          if (result.shouldUpdate) {
-            // Se tiver atualização, joga a tela de bloqueio obrigatória
-            inAppUpdates.startUpdate({
-              updateType: IAUUpdateKind.IMMEDIATE,
-            });
-          }
-        })
-        .catch((erro) => console.log("Erro ao checar atualização: ", erro));
-    }
+    checarAtualizacao(); // 💡 Chama a nossa função externa!
   }, []);
-  // ============================================================
+  // ==========================================
 
   const abrirModal = async () => {
     const projAtivo = await carregarProjetoAtivo();

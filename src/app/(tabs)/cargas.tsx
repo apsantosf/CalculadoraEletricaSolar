@@ -40,6 +40,9 @@ export default function CargaScreen() {
   const [horas, setHoras] = useState("");
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
+  // Estado para controlar a caixinha de Ciclo (Fator de Utilização)
+  const [temCiclo, setTemCiclo] = useState(false);
+
   useFocusEffect(
     useCallback(() => {
       const fetchDados = async () => {
@@ -61,6 +64,7 @@ export default function CargaScreen() {
     setPotencia(item.potenciaMediaW.toString());
     setQuantidade("1");
     setMostrarSugestoes(false);
+    setTemCiclo(false); // Reseta a caixinha ao escolher nova sugestão
   };
 
   const excluirSugestaoBd = async (id: string, nomeSugestao: string) => {
@@ -94,8 +98,13 @@ export default function CargaScreen() {
     }
 
     const potenciaNumerica = parseFloat(potencia.replace(",", "."));
-    const horasNumerica = parseFloat(horas.replace(",", "."));
+    let horasNumerica = parseFloat(horas.replace(",", "."));
     const quantidadeNumerica = parseInt(quantidade, 10);
+
+    // Aplica o fator de 35% se a caixinha estiver marcada
+    if (temCiclo) {
+      horasNumerica = parseFloat((horasNumerica * 0.35).toFixed(2));
+    }
 
     const novoEquipamento: EquipamentoCarga = {
       id: Math.random().toString(36).substring(7),
@@ -113,10 +122,12 @@ export default function CargaScreen() {
     );
     if (listaAtualizada) setListaSugestoes(listaAtualizada);
 
+    // Reseta todos os campos após adicionar
     setNome("");
     setPotencia("");
     setQuantidade("1");
     setHoras("");
+    setTemCiclo(false);
   };
 
   const removerEquipamento = (id: string, nomeEquipamento: string) => {
@@ -142,6 +153,11 @@ export default function CargaScreen() {
       (tot, item) => tot + item.potenciaW * item.quantidade * item.horasUsoDia,
       0,
     );
+
+  // Auxiliar para calcular e exibir as horas reais na tela em tempo real
+  const horasFatoradas = !isNaN(parseFloat(horas.replace(",", ".")))
+    ? (parseFloat(horas.replace(",", ".")) * 0.35).toFixed(1)
+    : "0.0";
 
   return (
     <ScrollView
@@ -225,14 +241,39 @@ export default function CargaScreen() {
           <View style={styles.inputGroup33}>
             <Text style={styles.label}>Horas/Dia:</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, temCiclo && styles.inputTravado]}
               keyboardType="numeric"
-              value={horas}
+              /* 💡 A MÁGICA AQUI: Mostra a hora reduzida dentro da caixa! */
+              value={
+                temCiclo && horas !== "" ? horasFatoradas.toString() : horas
+              }
               onChangeText={setHoras}
-              placeholder="Ex: 8"
+              placeholder="Ex: 24"
+              editable={!temCiclo}
             />
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => setTemCiclo(!temCiclo)}
+        >
+          <MaterialCommunityIcons
+            name={temCiclo ? "checkbox-marked" : "checkbox-blank-outline"}
+            size={24}
+            color={temCiclo ? "#0056B3" : "#64748B"}
+          />
+          <View style={{ marginLeft: 8 }}>
+            <Text style={styles.checkboxLabel}>
+              Equipamento com ciclo (ex: Geladeira)
+            </Text>
+            {temCiclo && horas !== "" && (
+              <Text style={styles.textoCalculoReal}>
+                Ajustado p/ 35% do tempo.
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.btnAdicionar}
@@ -374,6 +415,32 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: "#FFF",
   },
+
+  // 💡 NOVO: Contraste forte (Letra quase preta e em Negrito)
+  inputTravado: {
+    backgroundColor: "#E2E8F0",
+    color: "#0F172A",
+    fontWeight: "bold",
+  },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
+    marginTop: -4,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: "#334155",
+    fontWeight: "500",
+  },
+  textoCalculoReal: {
+    fontSize: 12,
+    color: "#0284C7",
+    marginTop: 2,
+    fontStyle: "italic",
+    fontWeight: "bold",
+  },
+
   row: { flexDirection: "row", justifyContent: "space-between" },
   inputGroup33: { width: "31%" },
   btnAdicionar: {
