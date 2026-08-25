@@ -1,4 +1,4 @@
-// src/app/(tabs)/carga.tsx
+// src/app/(tabs)/cargas.tsx
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -40,8 +40,11 @@ export default function CargaScreen() {
   const [horas, setHoras] = useState("");
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
-  // Estado para controlar a caixinha de Ciclo (Fator de Utilização)
+  // === ESTADOS DOS CÁLCULOS ESPECIAIS ===
   const [temCiclo, setTemCiclo] = useState(false);
+  const [usarInmetro, setUsarInmetro] = useState(false);
+  const [consumoInmetro, setConsumoInmetro] = useState("");
+  const [tempoInmetro, setTempoInmetro] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -64,7 +67,11 @@ export default function CargaScreen() {
     setPotencia(item.potenciaMediaW.toString());
     setQuantidade("1");
     setMostrarSugestoes(false);
-    setTemCiclo(false); // Reseta a caixinha ao escolher nova sugestão
+
+    setTemCiclo(false);
+    setUsarInmetro(false);
+    setConsumoInmetro("");
+    setTempoInmetro("");
   };
 
   const excluirSugestaoBd = async (id: string, nomeSugestao: string) => {
@@ -89,19 +96,93 @@ export default function CargaScreen() {
     }
   };
 
-  const adicionarEquipamento = async () => {
-    if (!nome || !potencia || !horas || !quantidade) {
-      Platform.OS === "web"
-        ? window.alert("Preencha todos os campos.")
-        : Alert.alert("Atenção", "Preencha todos os campos.");
+  const handleToggleCiclo = () => {
+    if (usarInmetro) {
+      const msg =
+        "Desmarque a caixa 'Selo Inmetro' primeiro para usar o ciclo.";
+      Platform.OS === "web" ? window.alert(msg) : Alert.alert("Atenção", msg);
+      return;
+    }
+    const novoEstado = !temCiclo;
+    setTemCiclo(novoEstado);
+  };
+
+  const handleToggleInmetro = () => {
+    if (temCiclo) {
+      const msg = "Desmarque a caixa 'Equipamento com ciclo' primeiro.";
+      Platform.OS === "web" ? window.alert(msg) : Alert.alert("Atenção", msg);
       return;
     }
 
-    const potenciaNumerica = parseFloat(potencia.replace(",", "."));
-    let horasNumerica = parseFloat(horas.replace(",", "."));
-    const quantidadeNumerica = parseInt(quantidade, 10);
+    const novoEstado = !usarInmetro;
+    setUsarInmetro(novoEstado);
 
-    // Aplica o fator de 35% se a caixinha estiver marcada
+    if (novoEstado) {
+      setPotencia("");
+      setHoras("");
+    } else {
+      setConsumoInmetro("");
+      setTempoInmetro("");
+      setPotencia("");
+      setHoras("");
+    }
+  };
+
+  const handleTempoInmetro = (texto: string) => {
+    setTempoInmetro(texto);
+    const t = parseFloat(texto.replace(",", "."));
+    if (!isNaN(t) && t > 0) {
+      const horasDiarias = t > 744 ? t / 365 : t / 30;
+      setHoras(horasDiarias.toFixed(1).replace(".0", ""));
+    } else {
+      setHoras("");
+    }
+  };
+
+  const adicionarEquipamento = async () => {
+    if (!nome || !quantidade) {
+      Platform.OS === "web"
+        ? window.alert("Preencha o nome e a quantidade.")
+        : Alert.alert("Atenção", "Preencha o nome e a quantidade.");
+      return;
+    }
+
+    if (usarInmetro && (!consumoInmetro || !tempoInmetro)) {
+      Platform.OS === "web"
+        ? window.alert("Digite o consumo (kWh) e as horas da etiqueta Inmetro.")
+        : Alert.alert(
+            "Atenção",
+            "Digite o consumo (kWh) e as horas da etiqueta Inmetro.",
+          );
+      return;
+    }
+
+    if (!usarInmetro && !potencia) {
+      Platform.OS === "web"
+        ? window.alert("Preencha a Potência (W).")
+        : Alert.alert("Atenção", "Preencha a Potência (W).");
+      return;
+    }
+
+    if (!horas) {
+      Platform.OS === "web"
+        ? window.alert("Preencha a quantidade de Horas/Dia.")
+        : Alert.alert("Atenção", "Preencha a quantidade de Horas/Dia.");
+      return;
+    }
+
+    const quantidadeNumerica = parseInt(quantidade, 10);
+    let potenciaNumerica = 0;
+    let horasNumerica = parseFloat(horas.replace(",", "."));
+
+    if (usarInmetro) {
+      const c = parseFloat(consumoInmetro.replace(",", "."));
+      const t = parseFloat(tempoInmetro.replace(",", "."));
+      potenciaNumerica = parseFloat(((c * 1000) / t).toFixed(2));
+    } else {
+      potenciaNumerica = parseFloat(potencia.replace(",", "."));
+    }
+
     if (temCiclo) {
       horasNumerica = parseFloat((horasNumerica * 0.35).toFixed(2));
     }
@@ -116,18 +197,22 @@ export default function CargaScreen() {
 
     setInventario([...inventario, novoEquipamento]);
 
-    const listaAtualizada = await salvarNovoEquipamentoNoBanco(
-      nome,
-      potenciaNumerica,
-    );
-    if (listaAtualizada) setListaSugestoes(listaAtualizada);
+    if (!usarInmetro) {
+      const listaAtualizada = await salvarNovoEquipamentoNoBanco(
+        nome,
+        potenciaNumerica,
+      );
+      if (listaAtualizada) setListaSugestoes(listaAtualizada);
+    }
 
-    // Reseta todos os campos após adicionar
     setNome("");
     setPotencia("");
     setQuantidade("1");
     setHoras("");
     setTemCiclo(false);
+    setUsarInmetro(false);
+    setConsumoInmetro("");
+    setTempoInmetro("");
   };
 
   const removerEquipamento = (id: string, nomeEquipamento: string) => {
@@ -154,10 +239,44 @@ export default function CargaScreen() {
       0,
     );
 
-  // Auxiliar para calcular e exibir as horas reais na tela em tempo real
-  const horasFatoradas = !isNaN(parseFloat(horas.replace(",", ".")))
-    ? (parseFloat(horas.replace(",", ".")) * 0.35).toFixed(1)
-    : "0.0";
+  let horasExibicao = horas;
+  if (temCiclo && horas !== "") {
+    const h = parseFloat(horas.replace(",", "."));
+    if (!isNaN(h)) horasExibicao = (h * 0.35).toFixed(1);
+  }
+
+  let potenciaExibicao = potencia;
+  if (usarInmetro) {
+    const c = parseFloat(consumoInmetro.replace(",", "."));
+    const t = parseFloat(tempoInmetro.replace(",", "."));
+    if (!isNaN(c) && c > 0 && !isNaN(t) && t > 0) {
+      potenciaExibicao = ((c * 1000) / t).toFixed(1);
+    } else {
+      potenciaExibicao = "0.0";
+    }
+  }
+
+  // 💡 NOVO: CÁLCULO DA MÉDIA INMETRO ORIGINAL (Para o "Rastro" visual)
+  let horasInmetroOriginal = "";
+  if (usarInmetro && tempoInmetro !== "") {
+    const t = parseFloat(tempoInmetro.replace(",", "."));
+    if (!isNaN(t) && t > 0) {
+      horasInmetroOriginal = (t > 744 ? t / 365 : t / 30)
+        .toFixed(1)
+        .replace(".0", "");
+    }
+  }
+
+  const mostrarDicaInmetro = () => {
+    const titulo = "Engenharia dos Fatores";
+    const mensagem =
+      "• Ciclo 35%: Reduz as horas digitadas (útil para motores antigos).\n\n• Selo Inmetro: Digite o consumo (kWh) e o tempo avaliado na etiqueta (Ex: 2080h ou 720h). O app trava a potência real e já sugere a média de horas diárias, mas deixa você livre para editar o tempo se o cliente usar mais ou menos que o Inmetro!";
+    if (Platform.OS === "web") {
+      window.alert(`${titulo}\n\n${mensagem}`);
+    } else {
+      Alert.alert(titulo, mensagem);
+    }
+  };
 
   return (
     <ScrollView
@@ -224,56 +343,178 @@ export default function CargaScreen() {
               style={styles.input}
               keyboardType="numeric"
               value={quantidade}
-              onChangeText={setQuantidade}
+              onChangeText={(texto) =>
+                setQuantidade(texto.replace(/[^0-9]/g, ""))
+              }
               placeholder="Ex: 5"
             />
           </View>
           <View style={styles.inputGroup33}>
             <Text style={styles.label}>Potência (W):</Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                usarInmetro && styles.inputTravado,
+                usarInmetro && potencia !== "" && { marginBottom: 2 },
+              ]}
               keyboardType="numeric"
-              value={potencia}
+              value={
+                usarInmetro
+                  ? potenciaExibicao === "0.0" && potencia === ""
+                    ? potencia
+                    : potenciaExibicao
+                  : potencia
+              }
               onChangeText={setPotencia}
               placeholder="Ex: 10"
+              editable={!usarInmetro}
             />
+            {usarInmetro && potenciaExibicao !== "0.0" && (
+              <Text style={styles.dicaVerde}>Real/Média</Text>
+            )}
           </View>
           <View style={styles.inputGroup33}>
-            <Text style={styles.label}>Horas/Dia:</Text>
+            <Text style={styles.label}>Horas/Dia/Un:</Text>
             <TextInput
-              style={[styles.input, temCiclo && styles.inputTravado]}
+              style={[
+                styles.input,
+                temCiclo && horas !== "" && { marginBottom: 2 },
+                usarInmetro &&
+                  horasInmetroOriginal !== "" && { marginBottom: 2 },
+              ]}
               keyboardType="numeric"
-              /* 💡 A MÁGICA AQUI: Mostra a hora reduzida dentro da caixa! */
-              value={
-                temCiclo && horas !== "" ? horasFatoradas.toString() : horas
-              }
+              value={horas}
               onChangeText={setHoras}
               placeholder="Ex: 24"
-              editable={!temCiclo}
             />
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.checkboxContainer}
-          onPress={() => setTemCiclo(!temCiclo)}
-        >
-          <MaterialCommunityIcons
-            name={temCiclo ? "checkbox-marked" : "checkbox-blank-outline"}
-            size={24}
-            color={temCiclo ? "#0056B3" : "#64748B"}
-          />
-          <View style={{ marginLeft: 8 }}>
-            <Text style={styles.checkboxLabel}>
-              Equipamento com ciclo (ex: Geladeira)
-            </Text>
             {temCiclo && horas !== "" && (
-              <Text style={styles.textoCalculoReal}>
-                Ajustado p/ 35% do tempo.
+              <Text style={styles.dicaVerde}>= {horasExibicao}h reais</Text>
+            )}
+
+            {/* 💡 NOVO: MÁGICA VISUAL DO RASTRO INMETRO */}
+            {usarInmetro && horasInmetroOriginal !== "" && (
+              <Text
+                style={[
+                  styles.dicaVerde,
+                  horas !== horasInmetroOriginal ? { color: "#F59E0B" } : {},
+                ]}
+              >
+                {horas !== horasInmetroOriginal
+                  ? "⚠️ Inmetro: "
+                  : "Média Inmetro: "}
+                {horasInmetroOriginal}h
               </Text>
             )}
           </View>
-        </TouchableOpacity>
+        </View>
+
+        {usarInmetro && (
+          <View
+            style={{
+              marginBottom: 16,
+              flexDirection: "row",
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ width: "48%" }}>
+              <Text style={styles.label}>Etiqueta (kWh):</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    borderColor: "#10B981",
+                    backgroundColor: "#ECFDF5",
+                    marginBottom: 0,
+                  },
+                ]}
+                keyboardType="numeric"
+                value={consumoInmetro}
+                onChangeText={setConsumoInmetro}
+                placeholder="Ex: 286"
+              />
+            </View>
+            <View style={{ width: "48%" }}>
+              <Text style={styles.label}>Tempo Avaliado (h):</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    borderColor: "#10B981",
+                    backgroundColor: "#ECFDF5",
+                    marginBottom: 0,
+                  },
+                ]}
+                keyboardType="numeric"
+                value={tempoInmetro}
+                onChangeText={handleTempoInmetro}
+                placeholder="2080(Ano) 720(Mês)"
+              />
+            </View>
+          </View>
+        )}
+
+        <View style={styles.caixaControlesContainer}>
+          <View style={styles.checkboxWrapper}>
+            <TouchableOpacity
+              style={[
+                styles.checkboxContainer,
+                usarInmetro && { opacity: 0.5 },
+              ]}
+              onPress={handleToggleCiclo}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name={temCiclo ? "checkbox-marked" : "checkbox-blank-outline"}
+                size={24}
+                color={
+                  usarInmetro ? "#CBD5E1" : temCiclo ? "#0056B3" : "#64748B"
+                }
+              />
+              <Text
+                style={[
+                  styles.checkboxLabel,
+                  usarInmetro && { color: "#94A3B8" },
+                ]}
+              >
+                Equipamento com ciclo (Ex: 35%)
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.checkboxWrapper}>
+            <TouchableOpacity
+              style={[styles.checkboxContainer, temCiclo && { opacity: 0.5 }]}
+              onPress={handleToggleInmetro}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name={
+                  usarInmetro ? "checkbox-marked" : "checkbox-blank-outline"
+                }
+                size={24}
+                color={
+                  temCiclo ? "#CBD5E1" : usarInmetro ? "#10B981" : "#64748B"
+                }
+              />
+              <Text
+                style={[styles.checkboxLabel, temCiclo && { color: "#94A3B8" }]}
+              >
+                Usar Selo Inmetro (Exato)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.btnInfo}
+              onPress={mostrarDicaInmetro}
+            >
+              <MaterialCommunityIcons
+                name="information-outline"
+                size={22}
+                color="#0284C7"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <TouchableOpacity
           style={styles.btnAdicionar}
@@ -415,30 +656,49 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: "#FFF",
   },
-
-  // 💡 NOVO: Contraste forte (Letra quase preta e em Negrito)
   inputTravado: {
     backgroundColor: "#E2E8F0",
     color: "#0F172A",
     fontWeight: "bold",
   },
+
+  // 💡 Mudei o nome de dicaHoraReal para dicaVerde para abranger Inmetro e Ciclo
+  dicaVerde: {
+    fontSize: 11,
+    color: "#059669",
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 12,
+    marginTop: -2,
+  },
+
+  caixaControlesContainer: {
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    paddingTop: 12,
+    marginBottom: 16,
+  },
+  checkboxWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
   checkboxContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
-    marginTop: -4,
+    flex: 1,
+  },
+  btnInfo: {
+    padding: 4,
+    marginLeft: 10,
+    justifyContent: "center",
   },
   checkboxLabel: {
     fontSize: 14,
     color: "#334155",
     fontWeight: "500",
-  },
-  textoCalculoReal: {
-    fontSize: 12,
-    color: "#0284C7",
-    marginTop: 2,
-    fontStyle: "italic",
-    fontWeight: "bold",
+    marginLeft: 8,
   },
 
   row: { flexDirection: "row", justifyContent: "space-between" },
