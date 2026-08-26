@@ -68,7 +68,10 @@ export default function RootLayout() {
       window.location.reload(); // Recarrega a página na web instantaneamente
     } else {
       Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!", [
-        { text: "OK", onPress: () => router.replace("/") }, // Recarrega a aba no celular
+        {
+          text: "OK",
+          onPress: () => router.replace(`/(tabs)/inicio?refresh=${Date.now()}`),
+        },
       ]);
     }
   };
