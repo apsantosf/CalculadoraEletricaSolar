@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 
-// 💡 NOVO: Importação inteligente (O Expo escolhe automaticamente entre Web e Android)
+// Importação inteligente (O Expo escolhe automaticamente entre Web e Android)
 import { checarAtualizacao } from "../utils/UpdateHelper";
 
 import {
@@ -37,7 +37,7 @@ export default function RootLayout() {
 
   // === TRAVA DE ATUALIZAÇÃO OBRIGATÓRIA ===
   useEffect(() => {
-    checarAtualizacao(); // 💡 Chama a nossa função externa!
+    checarAtualizacao();
   }, []);
   // ==========================================
 
@@ -57,12 +57,20 @@ export default function RootLayout() {
         : Alert.alert("Aviso", "Digite um nome para salvar o projeto.");
       return;
     }
+
     await atualizarNomeProjeto(nomeProjetoModal);
     await salvarNoHistorico();
     setModalVisivel(false);
-    Platform.OS === "web"
-      ? window.alert("Projeto salvo no histórico com sucesso!")
-      : Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!");
+
+    // 💡 A MÁGICA VISUAL ACONTECE AQUI: Força a tela a atualizar!
+    if (Platform.OS === "web") {
+      window.alert("Projeto salvo no histórico com sucesso!");
+      window.location.reload(); // Recarrega a página na web instantaneamente
+    } else {
+      Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!", [
+        { text: "OK", onPress: () => router.replace("/") }, // Recarrega a aba no celular
+      ]);
+    }
   };
 
   const reiniciarProjeto = async () => {
@@ -321,7 +329,6 @@ const styles = StyleSheet.create({
   modalBtnTextoBranco: { color: "#FFF", fontWeight: "bold", fontSize: 14 },
   modalBtnTextoCinza: { color: "#444", fontWeight: "bold", fontSize: 14 },
 
-  // NOVOS ESTILOS PARA A TELA DE ENCERRAMENTO (WEB)
   telaEncerramento: {
     flex: 1,
     justifyContent: "center",

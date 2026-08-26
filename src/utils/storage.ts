@@ -6,23 +6,37 @@ const PROJETO_ATIVO_KEY = "@EletricaSolar_ProjetoAtivo";
 const HISTORICO_KEY = "@EletricaSolar_Historico";
 const EQUIPAMENTOS_CUSTOM_KEY = "@EletricaSolar_EquipamentosCustom";
 
+// 💡 FUNÇÃO AUXILIAR PARA GERAR ID ÚNICO (O "RG" do Projeto)
+const gerarId = () => Math.random().toString(36).substring(7);
+
 // === SESSÃO ATIVA (O projeto que está aberto no momento) ===
 export const carregarProjetoAtivo = async () => {
   try {
     const jsonValue = await AsyncStorage.getItem(PROJETO_ATIVO_KEY);
-    return jsonValue != null
-      ? JSON.parse(jsonValue)
-      : {
-          nome: "Novo Projeto Solar",
-          inventario: [],
-          estado: "SP",
-          temRede: true,
-          faseRede: "Bifasico",
-          tipoCalculo: "equipamentos", // 'equipamentos' ou 'direto'
-          consumoDiretokWh: 0, // Guarda o valor total da conta de luz
-        };
+    if (jsonValue != null) {
+      const projeto = JSON.parse(jsonValue);
+      // 💡 RETROCOMPATIBILIDADE: Se for um projeto antigo sem ID, cria um agora
+      if (!projeto.id) {
+        projeto.id = gerarId();
+        await AsyncStorage.setItem(PROJETO_ATIVO_KEY, JSON.stringify(projeto));
+      }
+      return projeto;
+    }
+
+    // Se não tiver nada, cria um novo já com ID
+    return {
+      id: gerarId(),
+      nome: "Novo Projeto Solar",
+      inventario: [],
+      estado: "SP",
+      temRede: true,
+      faseRede: "Bifasico",
+      tipoCalculo: "equipamentos",
+      consumoDiretokWh: 0,
+    };
   } catch (e) {
     return {
+      id: gerarId(),
       nome: "Novo Projeto Solar",
       inventario: [],
       estado: "SP",
@@ -54,7 +68,23 @@ export const limparProjeto = async () => {
 export const carregarHistorico = async () => {
   try {
     const jsonValue = await AsyncStorage.getItem(HISTORICO_KEY);
-    return jsonValue != null ? JSON.parse(jsonValue) : [];
+    let historico = jsonValue != null ? JSON.parse(jsonValue) : [];
+
+    // 💡 RETROCOMPATIBILIDADE: Garante que todos no histórico tenham ID
+    let atualizou = false;
+    historico = historico.map((p: any) => {
+      if (!p.id) {
+        atualizou = true;
+        return { ...p, id: gerarId() };
+      }
+      return p;
+    });
+
+    if (atualizou) {
+      await AsyncStorage.setItem(HISTORICO_KEY, JSON.stringify(historico));
+    }
+
+    return historico;
   } catch (e) {
     return [];
   }
@@ -65,7 +95,9 @@ export const salvarNoHistorico = async () => {
     const projetoAtual = await carregarProjetoAtivo();
     let historico = await carregarHistorico();
 
-    const index = historico.findIndex((p: any) => p.nome === projetoAtual.nome);
+    // 💡 A MÁGICA: Agora busca pelo ID (RG), e não mais pelo Nome!
+    // Assim o usuário pode mudar o nome quantas vezes quiser.
+    const index = historico.findIndex((p: any) => p.id === projetoAtual.id);
     if (index >= 0) {
       historico[index] = projetoAtual; // Atualiza se já existir
     } else {
@@ -78,12 +110,16 @@ export const salvarNoHistorico = async () => {
 };
 
 export const carregarDoHistorico = async (projetoSalvo: any) => {
+  if (!projetoSalvo.id) projetoSalvo.id = gerarId();
   await AsyncStorage.setItem(PROJETO_ATIVO_KEY, JSON.stringify(projetoSalvo));
 };
 
-export const excluirDoHistorico = async (nomeProjeto: string) => {
+export const excluirDoHistorico = async (nomeOuId: string) => {
   let historico = await carregarHistorico();
-  historico = historico.filter((p: any) => p.nome !== nomeProjeto);
+  // 💡 Exclui procurando tanto pelo ID quanto pelo Nome (para proteger o código antigo da tela inicial)
+  historico = historico.filter(
+    (p: any) => p.id !== nomeOuId && p.nome !== nomeOuId,
+  );
   await AsyncStorage.setItem(HISTORICO_KEY, JSON.stringify(historico));
 };
 
