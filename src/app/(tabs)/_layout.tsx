@@ -1,156 +1,335 @@
-// src/app/(tabs)/_layout.tsx
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+// src/app/_layout.tsx
+import Constants from "expo-constants";
+import { Stack, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Alert,
+  BackHandler,
+  DeviceEventEmitter,
+  Image,
+  Modal,
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { carregarProjetoAtivo } from "../../utils/storage";
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
-  const insets = useSafeAreaInsets();
+import { checarAtualizacao } from "../utils/UpdateHelper";
+import {
+  atualizarNomeProjeto,
+  carregarProjetoAtivo,
+  limparProjeto,
+  salvarNoHistorico,
+} from "../utils/storage";
 
-  const paddingInferior =
-    Platform.OS === "web" ? 0 : insets.bottom > 0 ? insets.bottom + 5 : 15;
-  const alturaTotal = Platform.OS === "web" ? 65 : 60 + paddingInferior;
+export default function RootLayout() {
+  const [modalVisivel, setModalVisivel] = useState(false);
+  const [nomeProjetoModal, setNomeProjetoModal] = useState("");
+  const [isNovo, setIsNovo] = useState(true);
+  const [isEncerrado, setIsEncerrado] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    checarAtualizacao();
+  }, []);
+
+  const abrirModal = async () => {
+    const projAtivo = await carregarProjetoAtivo();
+    setNomeProjetoModal(
+      projAtivo.nome === "Novo Projeto Solar" ? "" : projAtivo.nome,
+    );
+    setIsNovo(projAtivo.nome === "Novo Projeto Solar");
+    setModalVisivel(true);
+  };
+
+  const handleSalvarProjeto = async () => {
+    if (!nomeProjetoModal.trim()) {
+      Platform.OS === "web"
+        ? window.alert("Digite um nome para salvar o projeto.")
+        : Alert.alert("Aviso", "Digite um nome para salvar o projeto.");
+      return;
+    }
+
+    await atualizarNomeProjeto(nomeProjetoModal);
+    await salvarNoHistorico();
+    setModalVisivel(false);
+
+    if (Platform.OS === "web") {
+      window.alert("Projeto salvo no histórico com sucesso!");
+      window.location.reload();
+    } else {
+      Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!");
+      // 💡 O TRUQUE DE MESTRE: Esperamos 300ms para o Android terminar de salvar no disco antes de gritar!
+      setTimeout(() => {
+        DeviceEventEmitter.emit("projetoSalvo", Date.now());
+      }, 300);
+    }
+  };
+
+  const reiniciarProjeto = async () => {
+    await limparProjeto();
+    setModalVisivel(false);
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.location.href = "/";
+    } else {
+      router.replace("/");
+    }
+  };
+
+  const encerrarApp = async () => {
+    await limparProjeto();
+    setModalVisivel(false);
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.open("", "_self", "");
+      window.close();
+      setTimeout(() => {
+        setIsEncerrado(true);
+      }, 300);
+    } else {
+      BackHandler.exitApp();
+    }
+  };
+
+  const HeaderDireita = () => {
+    const versaoApp = Constants.expoConfig?.version || "1.0.0";
+    return (
+      <View style={styles.headerRightContainer}>
+        <Text style={styles.versaoTexto}>v{versaoApp}</Text>
+        <TouchableOpacity onPress={abrirModal} style={styles.btnFechar}>
+          <Text style={styles.iconeFechar}>X</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  if (isEncerrado) {
+    return (
+      <View style={styles.telaEncerramento}>
+        <Text style={styles.tituloEncerramento}>Sessão Encerrada</Text>
+        <Text style={styles.textoEncerramento}>
+          Os dados foram apagados com segurança.
+        </Text>
+        <Text style={styles.textoEncerramento}>
+          Você já pode fechar esta aba do navegador.
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <View
-      style={[
-        styles.tabBarContainer,
-        { paddingBottom: paddingInferior, height: alturaTotal },
-      ]}
-    >
-      {state.routes.map((route: any, index: number) => {
-        const { options } = descriptors[route.key];
-        const label = options.title !== undefined ? options.title : route.name;
-        const isFocused = state.index === index;
+    <View style={styles.webContainer}>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: "#FFD700" },
+          headerTintColor: "#000",
+          headerTitleAlign: "center",
+          headerTitleStyle: { fontWeight: "bold", fontSize: 18 },
+          headerRight: () => <HeaderDireita />,
+        }}
+      >
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            title: "Elétrica Solar",
+            headerLeft: () => (
+              <Image
+                source={require("../../assets/images/banner-solar.png")}
+                style={styles.logoHeader}
+              />
+            ),
+          }}
+        />
+        <Stack.Screen name="index" options={{ title: "Carregando..." }} />
+      </Stack>
 
-        const onPress = async () => {
-          const projetoAtivo = await carregarProjetoAtivo();
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisivel}
+        onRequestClose={() => setModalVisivel(false)}
+      >
+        <View style={styles.modalBackground}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitulo}>Opções do Projeto</Text>
 
-          if (route.name === "cargas") {
-            if (projetoAtivo?.tipoCalculo === "direto") {
-              const msg =
-                "Você selecionou o Cálculo Direto. A lista de equipamentos não é necessária.";
-              Platform.OS === "web"
-                ? window.alert(msg)
-                : Alert.alert("Cálculo Direto ⚡", msg);
-              return;
-            }
-          }
+            <Text style={styles.modalLabel}>Nome do Projeto:</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={nomeProjetoModal}
+              onChangeText={setNomeProjetoModal}
+              placeholder="Digite o nome..."
+            />
 
-          if (route.name === "memorial" || route.name === "materiais") {
-            const isEquip =
-              projetoAtivo?.tipoCalculo === "equipamentos" ||
-              !projetoAtivo?.tipoCalculo;
-            const isDireto = projetoAtivo?.tipoCalculo === "direto";
-            const isMisto = projetoAtivo?.tipoCalculo === "misto";
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.btnVerde]}
+              onPress={handleSalvarProjeto}
+            >
+              <Text style={styles.modalBtnTextoBranco}>
+                {isNovo ? "Salvar Projeto" : "Atualizar Projeto"}
+              </Text>
+            </TouchableOpacity>
 
-            const temCargas =
-              projetoAtivo?.inventario && projetoAtivo.inventario.length > 0;
-            const temConsumo =
-              projetoAtivo?.consumoDiretokWh &&
-              projetoAtivo.consumoDiretokWh > 0;
+            <View style={styles.divisor} />
 
-            if (isEquip && !temCargas) {
-              const msg = "Adicione pelo menos um equipamento na aba 'Cargas'.";
-              Platform.OS === "web"
-                ? window.alert(msg)
-                : Alert.alert("Aba Bloqueada 🔒", msg);
-              return;
-            } else if (isDireto && !temConsumo) {
-              const msg =
-                "Informe o Consumo Mensal (kWh) na aba Início para processar os dados.";
-              Platform.OS === "web"
-                ? window.alert(msg)
-                : Alert.alert("Aba Bloqueada 🔒", msg);
-              return;
-            } else if (isMisto && (!temConsumo || !temCargas)) {
-              const msg =
-                "No MODO MISTO, informe o Consumo Base (aba Início) E adicione Cargas Extras (aba Cargas).";
-              Platform.OS === "web"
-                ? window.alert(msg)
-                : Alert.alert("Aba Bloqueada 🔒", msg);
-              return;
-            }
-          }
+            <Text style={styles.modalTexto}>
+              Deseja iniciar um projeto do zero ou sair?
+            </Text>
 
-          const event = navigation.emit({
-            type: "tabPress",
-            target: route.key,
-            canPreventDefault: true,
-          });
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.btnAzul]}
+              onPress={reiniciarProjeto}
+            >
+              <Text style={styles.modalBtnTextoBranco}>
+                Iniciar Novo Projeto
+              </Text>
+            </TouchableOpacity>
 
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        };
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.btnVermelho]}
+              onPress={encerrarApp}
+            >
+              <Text style={styles.modalBtnTextoBranco}>
+                Encerrar Aplicativo
+              </Text>
+            </TouchableOpacity>
 
-        const color = isFocused ? "#0056B3" : "#475569";
-
-        let iconName: any = "help-circle";
-        if (route.name === "inicio") iconName = "home-variant-outline";
-        if (route.name === "cargas") iconName = "format-list-checks";
-        if (route.name === "materiais") iconName = "toolbox-outline";
-        if (route.name === "memorial") iconName = "file-document-outline";
-
-        return (
-          <TouchableOpacity
-            key={route.key}
-            accessibilityRole="button"
-            accessibilityState={isFocused ? { selected: true } : {}}
-            onPress={onPress}
-            style={styles.tabItem}
-          >
-            <MaterialCommunityIcons name={iconName} size={24} color={color} />
-            <Text style={[styles.tabLabel, { color }]}>{label}</Text>
-          </TouchableOpacity>
-        );
-      })}
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.btnBranco]}
+              onPress={() => setModalVisivel(false)}
+            >
+              <Text style={styles.modalBtnTextoCinza}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-export default function TabLayout() {
-  return (
-    <Tabs
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tabs.Screen name="inicio" options={{ title: "Início" }} />
-      <Tabs.Screen name="cargas" options={{ title: "Cargas" }} />
-      <Tabs.Screen name="materiais" options={{ title: "Materiais" }} />
-      <Tabs.Screen name="memorial" options={{ title: "Memorial" }} />
-    </Tabs>
-  );
-}
-
 const styles = StyleSheet.create({
-  tabBarContainer: {
-    flexDirection: "row",
-    backgroundColor: "#FFF",
-    borderTopWidth: 1,
-    borderTopColor: "#CBD5E1",
+  webContainer: {
+    flex: 1,
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 480 : "100%",
+    alignSelf: "center",
+    backgroundColor: "#fff",
+    elevation: 5,
     // @ts-ignore
     boxShadow:
-      Platform.OS === "web" ? "0px -2px 5px rgba(0,0,0,0.03)" : undefined,
-    elevation: 8,
+      Platform.OS === "web" ? "0px 0px 10px rgba(0, 0, 0, 0.1)" : undefined,
   },
-  tabItem: {
+  headerRightContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  versaoTexto: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#333",
+    marginRight: 12,
+  },
+  btnFechar: { paddingHorizontal: 6, paddingVertical: 2 },
+  iconeFechar: { fontWeight: "bold", fontSize: 18, color: "#000" },
+  logoHeader: {
+    width: 44,
+    height: 32,
+    borderRadius: 6,
+    marginLeft: 10,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.2)",
+  },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContainer: {
+    width: "90%",
+    maxWidth: 340,
+    backgroundColor: "#FFF",
+    borderRadius: 10,
+    padding: 20,
+    alignItems: "center",
+    elevation: 10,
+    // @ts-ignore
+    boxShadow:
+      Platform.OS === "web" ? "0px 4px 20px rgba(0, 0, 0, 0.25)" : undefined,
+  },
+  modalTitulo: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#000",
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#444",
+    alignSelf: "flex-start",
+    marginBottom: 5,
+  },
+  modalInput: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#CCC",
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 15,
+    backgroundColor: "#F9F9F9",
+  },
+  divisor: {
+    height: 1,
+    width: "100%",
+    backgroundColor: "#EEE",
+    marginVertical: 15,
+  },
+  modalTexto: {
+    fontSize: 12,
+    color: "#777",
+    textAlign: "center",
+    marginBottom: 15,
+  },
+  modalBtn: {
+    width: "100%",
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  btnVerde: { backgroundColor: "#28A745" },
+  btnAzul: { backgroundColor: "#007BFF" },
+  btnVermelho: { backgroundColor: "#DC3545" },
+  btnBranco: {
+    backgroundColor: "#F8F9FA",
+    borderWidth: 1,
+    borderColor: "#DCDCDC",
+  },
+  modalBtnTextoBranco: { color: "#FFF", fontWeight: "bold", fontSize: 14 },
+  modalBtnTextoCinza: { color: "#444", fontWeight: "bold", fontSize: 14 },
+  telaEncerramento: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 5,
+    backgroundColor: "#F8F9FA",
+    padding: 20,
   },
-  tabLabel: {
-    fontSize: 12,
+  tituloEncerramento: {
+    fontSize: 24,
     fontWeight: "bold",
-    marginTop: 4,
+    color: "#1E293B",
+    marginBottom: 10,
+  },
+  textoEncerramento: {
+    fontSize: 15,
+    color: "#64748B",
+    marginBottom: 6,
+    textAlign: "center",
   },
 });

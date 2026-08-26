@@ -1,11 +1,11 @@
 // src/app/(tabs)/inicio.tsx
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// 💡 MUDANÇA 1: Adicionado o useLocalSearchParams aqui na importação
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  DeviceEventEmitter,
   Linking,
   Modal,
   Platform,
@@ -26,28 +26,24 @@ import {
 
 export default function InicioScreen() {
   const router = useRouter();
-  // 💡 MUDANÇA 2: Ativando o receptor do "chacoalhão" (parâmetro refresh)
-  const { refresh } = useLocalSearchParams();
+
+  // 💡 CHAVE DE ATUALIZAÇÃO (Fica vigiando o rádio)
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [projeto, setProjeto] = useState<any>(null);
   const [historico, setHistorico] = useState<any[]>([]);
 
   const [mostrarPickerEstado, setMostrarPickerEstado] = useState(false);
   const [mostrarPickerHistorico, setMostrarPickerHistorico] = useState(false);
-
-  // Controle do Modal de Termos
   const [mostrarTermos, setMostrarTermos] = useState(false);
 
-  // Verifica se o usuário já aceitou os termos ao carregar o app
   useEffect(() => {
     const verificarTermos = async () => {
       try {
         const aceitou = await AsyncStorage.getItem(
           "@EletricaSolar_TermosAceitos",
         );
-        if (aceitou !== "true") {
-          setMostrarTermos(true);
-        }
+        if (aceitou !== "true") setMostrarTermos(true);
       } catch (e) {
         console.error("Erro ao verificar termos:", e);
       }
@@ -60,8 +56,20 @@ export default function InicioScreen() {
     setMostrarTermos(false);
   };
 
-  // 💡 MUDANÇA 3: O ÚNICO OLHEIRO DEFINITIVO.
-  // Ele agora escuta tanto as mudanças normais de aba quanto o chacoalhão (refresh) do _layout!
+  // 💡 RECEPTOR DO RÁDIO: Quando escuta o grito do _layout, muda a chave de atualização
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener(
+      "projetoSalvo",
+      (timestamp) => {
+        setRefreshKey(timestamp);
+      },
+    );
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // 💡 O OLHEIRO DEFINITIVO
   useFocusEffect(
     useCallback(() => {
       const fetchDados = async () => {
@@ -71,7 +79,7 @@ export default function InicioScreen() {
         setHistorico(hist);
       };
       fetchDados();
-    }, [refresh]), // <--- Parâmetro refresh adicionado aqui!
+    }, [refreshKey]),
   );
 
   const salvarAlteracoes = async (novosValores: any) => {
@@ -112,24 +120,11 @@ export default function InicioScreen() {
       else salvarAlteracoes({ tipoCalculo: novoTipo });
     };
 
-    if (perdeEquipamentos) {
-      const msg =
-        "Mudar para 'Consumo Total' apagará a lista de cargas atuais. Deseja continuar?";
-      if (Platform.OS === "web") {
-        if (window.confirm(msg)) executarTroca();
-      } else {
-        Alert.alert("Aviso ⚠️", msg, [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Sim, apagar e mudar",
-            style: "destructive",
-            onPress: executarTroca,
-          },
-        ]);
-      }
-    } else if (perdeConsumo) {
-      const msg =
-        "Mudar para 'Por Equipamentos' apagará o consumo base atual da conta. Deseja continuar?";
+    if (perdeEquipamentos || perdeConsumo) {
+      const msg = perdeEquipamentos
+        ? "Mudar para 'Consumo Total' apagará a lista de cargas atuais. Deseja continuar?"
+        : "Mudar para 'Por Equipamentos' apagará o consumo base atual da conta. Deseja continuar?";
+
       if (Platform.OS === "web") {
         if (window.confirm(msg)) executarTroca();
       } else {
@@ -196,6 +191,11 @@ export default function InicioScreen() {
     ? `${estadoAtual.nome} - ${estadoAtual.uf} (${estadoAtual.hspMedio} HSP)`
     : "Selecione um Estado";
 
+  // 💡 ORDENAÇÃO ALFABÉTICA DO HISTÓRICO AQUI
+  const historicoOrdenado = [...historico].sort((a, b) =>
+    a.nome.localeCompare(b.nome),
+  );
+
   return (
     <ScrollView
       style={styles.container}
@@ -208,7 +208,6 @@ export default function InicioScreen() {
         visible={mostrarTermos}
         animationType="slide"
         transparent={true}
-        // Bloqueia o botão de voltar no Android para não burlarem a tela
         onRequestClose={() => {}}
       >
         <View style={styles.modalOverlay}>
@@ -230,7 +229,6 @@ export default function InicioScreen() {
                 pré-dimensionamento voltada para auxiliar profissionais do setor
                 fotovoltaico.
               </Text>
-
               <Text style={styles.textoTermo}>
                 <Text style={{ fontWeight: "bold" }}>
                   1. Não substitui projeto:{" "}
@@ -238,14 +236,12 @@ export default function InicioScreen() {
                 Os resultados gerados não substituem o Projeto Executivo de
                 Engenharia e o recolhimento de ART/TRT.
               </Text>
-
               <Text style={styles.textoTermo}>
                 <Text style={{ fontWeight: "bold" }}>2. Risco Elétrico: </Text>
                 Instalações solares envolvem risco de morte e incêndio. A
                 execução deve ser feita estritamente por profissionais
                 qualificados, seguindo as normas ABNT (NBR 5410 e NBR 16690).
               </Text>
-
               <Text style={styles.textoTermo}>
                 <Text style={{ fontWeight: "bold" }}>3. Isenção: </Text>
                 Os criadores deste aplicativo não se responsabilizam por
@@ -253,7 +249,6 @@ export default function InicioScreen() {
                 junto à concessionária ou prejuízos financeiros decorrentes do
                 uso inadequado das informações aqui geradas.
               </Text>
-
               <Text style={styles.textoTermoFinal}>
                 Ao prosseguir, você declara estar ciente destes riscos e assume
                 total responsabilidade pelo uso dos dados.
@@ -275,7 +270,6 @@ export default function InicioScreen() {
       <View style={styles.card}>
         <View style={styles.cabecalhoCard}>
           <Text style={styles.tituloCard}>Identificação do Cliente</Text>
-
           <TouchableOpacity
             onPress={() => setMostrarPickerHistorico(!mostrarPickerHistorico)}
             style={styles.btnAbreHistorico}
@@ -292,12 +286,12 @@ export default function InicioScreen() {
         {mostrarPickerHistorico && (
           <View style={styles.dropdownBox}>
             <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled={true}>
-              {historico.length === 0 ? (
+              {historicoOrdenado.length === 0 ? (
                 <Text style={styles.txtHistoricoVazio}>
                   Nenhum projeto salvo ainda.
                 </Text>
               ) : (
-                historico.map((item, index) => (
+                historicoOrdenado.map((item, index) => (
                   <View key={index} style={styles.historicoRow}>
                     <TouchableOpacity
                       style={styles.historicoItem}
@@ -600,8 +594,6 @@ export default function InicioScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC", padding: 16 },
-
-  // --- Estilos do Modal de Termos ---
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -657,8 +649,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     elevation: 2,
   },
-  // ----------------------------------
-
   card: {
     backgroundColor: "#FFF",
     padding: 16,
@@ -666,12 +656,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E2E8F0",
     marginBottom: 16,
+    elevation: 1,
     // @ts-ignore
     boxShadow:
       Platform.OS === "web" ? "0px 2px 4px rgba(0,0,0,0.02)" : undefined,
-    elevation: 1,
   },
-
   cabecalhoCard: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -693,7 +682,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
   },
-
   txtHistoricoVazio: {
     padding: 14,
     textAlign: "center",
@@ -713,7 +701,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   label: {
     fontSize: 13,
     color: "#475569",
@@ -729,7 +716,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     fontSize: 15,
   },
-
   pickerButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -763,7 +749,6 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: { fontSize: 15, color: "#334155", fontWeight: "500" },
   dropdownItemHsp: { fontSize: 14, color: "#0056B3", fontWeight: "bold" },
-
   linhaBotoes: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -794,7 +779,6 @@ const styles = StyleSheet.create({
   btnPillAtivoOff: { backgroundColor: "#059669", borderColor: "#059669" },
   txtPill: { color: "#475569", fontWeight: "bold", fontSize: 13 },
   txtPillAtivo: { color: "#FFF" },
-
   btnManual: {
     backgroundColor: "#475569",
     padding: 14,
