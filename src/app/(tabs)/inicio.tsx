@@ -1,7 +1,8 @@
 // src/app/(tabs)/inicio.tsx
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect, useRouter } from "expo-router";
+// 💡 MUDANÇA 1: Adicionado o useLocalSearchParams aqui na importação
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
@@ -25,6 +26,9 @@ import {
 
 export default function InicioScreen() {
   const router = useRouter();
+  // 💡 MUDANÇA 2: Ativando o receptor do "chacoalhão" (parâmetro refresh)
+  const { refresh } = useLocalSearchParams();
+
   const [projeto, setProjeto] = useState<any>(null);
   const [historico, setHistorico] = useState<any[]>([]);
 
@@ -56,6 +60,8 @@ export default function InicioScreen() {
     setMostrarTermos(false);
   };
 
+  // 💡 MUDANÇA 3: O ÚNICO OLHEIRO DEFINITIVO.
+  // Ele agora escuta tanto as mudanças normais de aba quanto o chacoalhão (refresh) do _layout!
   useFocusEffect(
     useCallback(() => {
       const fetchDados = async () => {
@@ -65,7 +71,7 @@ export default function InicioScreen() {
         setHistorico(hist);
       };
       fetchDados();
-    }, []),
+    }, [refresh]), // <--- Parâmetro refresh adicionado aqui!
   );
 
   const salvarAlteracoes = async (novosValores: any) => {
