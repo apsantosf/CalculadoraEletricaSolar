@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   Alert,
   BackHandler,
+  DeviceEventEmitter,
   Image,
   Modal,
   Platform,
@@ -15,7 +16,6 @@ import {
   View,
 } from "react-native";
 
-// Importação inteligente (O Expo escolhe automaticamente entre Web e Android)
 import { checarAtualizacao } from "../utils/UpdateHelper";
 
 import {
@@ -29,17 +29,13 @@ export default function RootLayout() {
   const [modalVisivel, setModalVisivel] = useState(false);
   const [nomeProjetoModal, setNomeProjetoModal] = useState("");
   const [isNovo, setIsNovo] = useState(true);
-
-  // Controle de estado para a tela de Encerramento na Web
   const [isEncerrado, setIsEncerrado] = useState(false);
 
   const router = useRouter();
 
-  // === TRAVA DE ATUALIZAÇÃO OBRIGATÓRIA ===
   useEffect(() => {
     checarAtualizacao();
   }, []);
-  // ==========================================
 
   const abrirModal = async () => {
     const projAtivo = await carregarProjetoAtivo();
@@ -62,17 +58,15 @@ export default function RootLayout() {
     await salvarNoHistorico();
     setModalVisivel(false);
 
-    // 💡 A MÁGICA VISUAL ACONTECE AQUI: Força a tela a atualizar!
     if (Platform.OS === "web") {
       window.alert("Projeto salvo no histórico com sucesso!");
-      window.location.reload(); // Recarrega a página na web instantaneamente
+      window.location.reload();
     } else {
-      Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!", [
-        {
-          text: "OK",
-          onPress: () => router.replace(`/(tabs)/inicio?refresh=${Date.now()}`),
-        },
-      ]);
+      Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!");
+      // 💡 A BALA DE PRATA: Espera o banco salvar e grita no rádio!
+      setTimeout(() => {
+        DeviceEventEmitter.emit("projetoSalvo", Date.now());
+      }, 300);
     }
   };
 
@@ -91,11 +85,8 @@ export default function RootLayout() {
     setModalVisivel(false);
 
     if (Platform.OS === "web" && typeof window !== "undefined") {
-      // 1. Tenta forçar o fechamento da aba nativamente
       window.open("", "_self", "");
       window.close();
-
-      // 2. Se o navegador bloquear, o React entra em ação e substitui a tela com segurança
       setTimeout(() => {
         setIsEncerrado(true);
       }, 300);
@@ -106,7 +97,6 @@ export default function RootLayout() {
 
   const HeaderDireita = () => {
     const versaoApp = Constants.expoConfig?.version || "1.0.0";
-
     return (
       <View style={styles.headerRightContainer}>
         <Text style={styles.versaoTexto}>v{versaoApp}</Text>
@@ -117,7 +107,6 @@ export default function RootLayout() {
     );
   };
 
-  // === TELA DE ENCERRAMENTO (ABATE VISUAL SEGURO) ===
   if (isEncerrado) {
     return (
       <View style={styles.telaEncerramento}>
@@ -132,7 +121,6 @@ export default function RootLayout() {
     );
   }
 
-  // === APLICATIVO NORMAL ===
   return (
     <View style={styles.webContainer}>
       <Stack
@@ -256,7 +244,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.2)",
   },
-
   modalBackground: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -276,7 +263,6 @@ const styles = StyleSheet.create({
     boxShadow:
       Platform.OS === "web" ? "0px 4px 20px rgba(0, 0, 0, 0.25)" : undefined,
   },
-
   modalTitulo: {
     fontSize: 18,
     fontWeight: "bold",
@@ -300,7 +286,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     backgroundColor: "#F9F9F9",
   },
-
   divisor: {
     height: 1,
     width: "100%",
@@ -313,7 +298,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 15,
   },
-
   modalBtn: {
     width: "100%",
     paddingVertical: 10,
@@ -331,7 +315,6 @@ const styles = StyleSheet.create({
   },
   modalBtnTextoBranco: { color: "#FFF", fontWeight: "bold", fontSize: 14 },
   modalBtnTextoCinza: { color: "#444", fontWeight: "bold", fontSize: 14 },
-
   telaEncerramento: {
     flex: 1,
     justifyContent: "center",

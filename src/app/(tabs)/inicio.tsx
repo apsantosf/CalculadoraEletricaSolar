@@ -27,12 +27,9 @@ import {
 export default function InicioScreen() {
   const router = useRouter();
 
-  // 💡 CHAVE DE ATUALIZAÇÃO (Fica vigiando o rádio)
   const [refreshKey, setRefreshKey] = useState(0);
-
   const [projeto, setProjeto] = useState<any>(null);
   const [historico, setHistorico] = useState<any[]>([]);
-
   const [mostrarPickerEstado, setMostrarPickerEstado] = useState(false);
   const [mostrarPickerHistorico, setMostrarPickerHistorico] = useState(false);
   const [mostrarTermos, setMostrarTermos] = useState(false);
@@ -56,7 +53,6 @@ export default function InicioScreen() {
     setMostrarTermos(false);
   };
 
-  // 💡 RECEPTOR DO RÁDIO: Quando escuta o grito do _layout, muda a chave de atualização
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener(
       "projetoSalvo",
@@ -69,7 +65,6 @@ export default function InicioScreen() {
     };
   }, []);
 
-  // 💡 O OLHEIRO DEFINITIVO
   useFocusEffect(
     useCallback(() => {
       const fetchDados = async () => {
@@ -191,9 +186,9 @@ export default function InicioScreen() {
     ? `${estadoAtual.nome} - ${estadoAtual.uf} (${estadoAtual.hspMedio} HSP)`
     : "Selecione um Estado";
 
-  // 💡 ORDENAÇÃO ALFABÉTICA DO HISTÓRICO AQUI
+  // 💡 ORDENAÇÃO ALFABÉTICA DO HISTÓRICO COM PROTEÇÃO
   const historicoOrdenado = [...historico].sort((a, b) =>
-    a.nome.localeCompare(b.nome),
+    (a.nome || "").localeCompare(b.nome || ""),
   );
 
   return (
@@ -201,9 +196,6 @@ export default function InicioScreen() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 40 }}
     >
-      {/* ========================================== */}
-      {/* MODAL DE TERMOS DE RESPONSABILIDADE        */}
-      {/* ========================================== */}
       <Modal
         visible={mostrarTermos}
         animationType="slide"
@@ -266,7 +258,6 @@ export default function InicioScreen() {
         </View>
       </Modal>
 
-      {/* IDENTIFICAÇÃO DO CLIENTE E CARREGAMENTO DE HISTÓRICO */}
       <View style={styles.card}>
         <View style={styles.cabecalhoCard}>
           <Text style={styles.tituloCard}>Identificação do Cliente</Text>
@@ -332,7 +323,6 @@ export default function InicioScreen() {
         />
       </View>
 
-      {/* DADOS DO LOCAL DE INSTALAÇÃO */}
       <View style={styles.card}>
         <Text style={styles.tituloCard}>Dados do Local de Instalação</Text>
 
@@ -369,7 +359,6 @@ export default function InicioScreen() {
           </View>
         )}
 
-        {/* MODO DE CÁLCULO */}
         <Text style={styles.label}>Método de Dimensionamento:</Text>
         <View style={styles.linhaBotoes}>
           <TouchableOpacity
@@ -447,7 +436,6 @@ export default function InicioScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* CAMPO DE DIGITAR O CONSUMO */}
         {(projeto?.tipoCalculo === "direto" ||
           projeto?.tipoCalculo === "misto") && (
           <View style={{ marginBottom: 10, marginTop: 8 }}>
