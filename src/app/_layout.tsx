@@ -17,7 +17,6 @@ import {
 } from "react-native";
 
 import { checarAtualizacao } from "../utils/UpdateHelper";
-
 import {
   atualizarNomeProjeto,
   carregarProjetoAtivo,
@@ -30,7 +29,6 @@ export default function RootLayout() {
   const [nomeProjetoModal, setNomeProjetoModal] = useState("");
   const [isNovo, setIsNovo] = useState(true);
   const [isEncerrado, setIsEncerrado] = useState(false);
-
   const router = useRouter();
 
   useEffect(() => {
@@ -63,7 +61,6 @@ export default function RootLayout() {
       window.location.reload();
     } else {
       Alert.alert("Sucesso", "Projeto salvo no histórico com sucesso!");
-      // 💡 A BALA DE PRATA: Espera o banco salvar e grita no rádio!
       setTimeout(() => {
         DeviceEventEmitter.emit("projetoSalvo", Date.now());
       }, 300);

@@ -52,25 +52,26 @@ export default function InicioScreen() {
     setMostrarTermos(false);
   };
 
-  // 💡 FUNÇÃO CENTRAL: Vai no banco de dados e atualiza a tela na marra!
+  // 💡 FUNÇÃO CENTRAL
   const carregarTudo = async () => {
     const p = await carregarProjetoAtivo();
     setProjeto(p);
     const hist = await carregarHistorico();
     setHistorico(hist);
+
+    // 💡 AVISO PARA O RODAPÉ: O projeto foi carregado, verifique o tipo de cálculo!
+    if (p) DeviceEventEmitter.emit("projetoModificado", p);
   };
 
-  // 💡 O RECEPTOR DO RÁDIO DIRETO: Escutou o grito do _layout, ele busca os dados na lata!
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener("projetoSalvo", () => {
-      carregarTudo(); // Chama a função sem depender de "foco" na tela
+      carregarTudo();
     });
     return () => {
       subscription.remove();
     };
   }, []);
 
-  // 💡 O OLHEIRO DE ABAS: Continua aqui só para quando você for na aba "Cargas" e voltar
   useFocusEffect(
     useCallback(() => {
       carregarTudo();
@@ -84,6 +85,9 @@ export default function InicioScreen() {
       "@EletricaSolar_ProjetoAtivo",
       JSON.stringify(pAtualizado),
     );
+
+    // 💡 AVISO PARA O RODAPÉ: O usuário mudou o tipo de cálculo, atualize as abas na hora!
+    DeviceEventEmitter.emit("projetoModificado", pAtualizado);
   };
 
   const alternarTipoCalculo = (
@@ -143,6 +147,8 @@ export default function InicioScreen() {
       await carregarDoHistorico(proj);
       setProjeto(proj);
       setMostrarPickerHistorico(false);
+      // 💡 Atualiza o rodapé ao carregar o histórico
+      DeviceEventEmitter.emit("projetoModificado", proj);
     };
     if (Platform.OS === "web") {
       if (window.confirm(msg)) await executar();
@@ -158,7 +164,6 @@ export default function InicioScreen() {
     const msg = `Deseja excluir permanentemente o projeto "${nome}" do histórico?`;
     const executar = async () => {
       await excluirDoHistorico(nome);
-      // Chama a nova função para atualizar a tela na mesma hora
       carregarTudo();
     };
     if (Platform.OS === "web") {
