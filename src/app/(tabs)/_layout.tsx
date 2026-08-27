@@ -3,10 +3,14 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useEffect, useState } from "react";
 import { DeviceEventEmitter, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; // 💡 NOVA IMPORTAÇÃO: O Detetive de Tela!
 import { carregarProjetoAtivo } from "../../utils/storage";
 
 export default function TabsLayout() {
   const [modoDireto, setModoDireto] = useState(false);
+
+  // 💡 Ele descobre o tamanho exato dos botões nativos do celular do usuário
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const verificarModo = async () => {
@@ -29,20 +33,21 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        // 💡 TRAVAMOS AS CORES: Combinando perfeitamente com o resto do aplicativo!
-        tabBarActiveTintColor: "#0284C7", // Azul vibrante do seu app
-        tabBarInactiveTintColor: "#64748B", // Cinza neutro para inativos
+        tabBarActiveTintColor: "#0284C7",
+        tabBarInactiveTintColor: "#64748B",
 
         tabBarStyle: {
-          backgroundColor: "#FFFFFF", // Fundo sempre branco
-          borderTopColor: "#E2E8F0", // Linha divisória sutil
-          height: Platform.OS === "web" ? 74 : 65, // 💡 Altura aumentada para não "comer" a fonte na web
-          paddingBottom: Platform.OS === "web" ? 14 : 10, // 💡 Empurra as letrinhas pra cima
+          backgroundColor: "#FFFFFF",
+          borderTopColor: "#E2E8F0",
+          // 💡 A MÁGICA: Somamos a margem de segurança (insets.bottom) à altura!
+          height: Platform.OS === "web" ? 74 : 65 + insets.bottom,
+          // 💡 Empurramos o conteúdo das abas para cima para não bater nos botões
+          paddingBottom: Platform.OS === "web" ? 14 : 10 + insets.bottom,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: "bold", // Negrito para garantir a legibilidade das palavras
+          fontWeight: "bold",
         },
       }}
     >
@@ -59,7 +64,7 @@ export default function TabsLayout() {
         name="cargas"
         options={{
           title: "Cargas",
-          href: modoDireto ? null : "/cargas", // A mágica de esconder a aba continua aqui!
+          href: modoDireto ? null : "/cargas",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons
               name="format-list-checks"
